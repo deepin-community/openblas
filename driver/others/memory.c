@@ -73,6 +73,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "common.h"
 
+#define NEW_BUFFERS 512
 #ifndef likely
 #ifdef __GNUC__
 #define likely(x) __builtin_expect(!!(x), 1)
@@ -232,11 +233,11 @@ int get_num_procs(void);
 #else
 int get_num_procs(void) {
   static int nums = 0;
-
+  int ret;
 #if defined(__GLIBC_PREREQ)
   cpu_set_t cpuset,*cpusetp;
   size_t size;
-  int ret;
+
 #if !__GLIBC_PREREQ(2, 7)
   int i;
 #if !__GLIBC_PREREQ(2, 6)
@@ -246,20 +247,32 @@ int get_num_procs(void) {
 #endif
 
   if (!nums) nums = sysconf(_SC_NPROCESSORS_CONF);
+
+#if defined(USE_OPENMP)
+#if _OPENMP >= 201511
+    int i,n;
+    n = 0;
+    ret = omp_get_num_places();
+    if (ret > 0) for (i=0; i<ret;i++) n+= omp_get_place_num_procs(i);
+    if (n > 0) nums = n;
+#endif
+    return (nums > 0 ? nums : 2);
+#endif
+
 #if !defined(OS_LINUX)
-  return nums;
+  return (nums > 0 ? nums : 2);
 #endif
 
 #if !defined(__GLIBC_PREREQ)
-  return nums;
+  return (nums > 0 ? nums :2);
 #else
  #if !__GLIBC_PREREQ(2, 3)
-  return nums;
+  return (nums > 0 ? nums :2);
  #endif
 
  #if !__GLIBC_PREREQ(2, 7)
   ret = sched_getaffinity(0,sizeof(cpuset), &cpuset);
-  if (ret!=0) return nums;
+  if (ret!=0) return (nums > 0 ? nums :2);
   n=0;
   #if !__GLIBC_PREREQ(2, 6)
   for (i=0;i<nums;i++)
@@ -268,31 +281,31 @@ int get_num_procs(void) {
   #else
   nums = CPU_COUNT(sizeof(cpuset),&cpuset);
   #endif
-  return nums;
+  return (nums > 0 ? nums :2);
  #else
   if (nums >= CPU_SETSIZE) {
     cpusetp = CPU_ALLOC(nums);
       if (cpusetp == NULL) {
-        return nums;
+        return (nums > 0 ? nums :2);
       }
     size = CPU_ALLOC_SIZE(nums);
     ret = sched_getaffinity(0,size,cpusetp);
     if (ret!=0) {
       CPU_FREE(cpusetp);
-      return nums;
+      return (nums > 0 ? nums :2);
     }
     ret = CPU_COUNT_S(size,cpusetp);
     if (ret > 0 && ret < nums) nums = ret;
     CPU_FREE(cpusetp);
-    return nums;
+    return (nums > 0 ? nums :2);
   } else {
     ret = sched_getaffinity(0,sizeof(cpuset),&cpuset);
     if (ret!=0) {
-      return nums;
+      return (nums > 0 ? nums :2);
     }
     ret = CPU_COUNT(&cpuset);
     if (ret > 0 && ret < nums) nums = ret;
-    return nums;
+    return (nums > 0 ? nums :2);
   }
  #endif
 #endif
@@ -414,9 +427,9 @@ int  goto_get_num_procs  (void) {
   return blas_cpu_number;
 }
 
-static void blas_memory_init();
+static void blas_memory_init(void);
 
-void openblas_fork_handler()
+void openblas_fork_handler(void)
 {
   // This handler shuts down the OpenBLAS-managed PTHREAD pool when OpenBLAS is
   // built with "make USE_OPENMP=0".
@@ -433,9 +446,9 @@ void openblas_fork_handler()
 #endif
 }
 
-extern int openblas_num_threads_env();
-extern int openblas_goto_num_threads_env();
-extern int openblas_omp_num_threads_env();
+extern int openblas_num_threads_env(void);
+extern int openblas_goto_num_threads_env(void);
+extern int openblas_omp_num_threads_env(void);
 
 int blas_get_cpu_number(void){
 #if defined(OS_LINUX) || defined(OS_WINDOWS) || defined(OS_FREEBSD) || defined(OS_OPENBSD) || defined(OS_NETBSD) || defined(OS_DRAGONFLY) || defined(OS_DARWIN) || defined(OS_ANDROID) || defined(OS_HAIKU)
@@ -579,7 +592,7 @@ static BLASULONG  key_lock = 0UL;
 #endif
 
 /* Returns a pointer to the start of the per-thread memory allocation data */
-static __inline struct alloc_t ** get_memory_table() {
+static __inline struct alloc_t ** get_memory_table(void) {
 #if defined(SMP)
 LOCK_COMMAND(&key_lock);
 lsk=local_storage_key;
@@ -1132,7 +1145,7 @@ static void blas_memory_cleanup(void* ptr){
   }
 }
 
-static void blas_memory_init(){
+static void blas_memory_init(void){
 #if defined(SMP)
 #  if defined(OS_WINDOWS)
   local_storage_key = TlsAlloc();
@@ -1489,7 +1502,7 @@ static void gotoblas_memory_init(void) {
 /* Initialization for all function; this function should be called before main */
 
 static int gotoblas_initialized = 0;
-extern void openblas_read_env();
+extern void openblas_read_env(void);
 
 void CONSTRUCTOR gotoblas_init(void) {
 
@@ -1792,11 +1805,12 @@ int get_num_procs(void);
 int get_num_procs(void) {
 
   static int nums = 0;
-
+  int ret;
+	
 #if defined(__GLIBC_PREREQ)
   cpu_set_t cpuset,*cpusetp;
   size_t size;
-  int ret;
+
 #if !__GLIBC_PREREQ(2, 7)
   int i;
 #if !__GLIBC_PREREQ(2, 6)
@@ -1806,53 +1820,66 @@ int get_num_procs(void) {
 #endif
 
   if (!nums) nums = sysconf(_SC_NPROCESSORS_CONF);
-#if !defined(OS_LINUX)
-  return nums;
+
+#if defined(USE_OPENMP)
+/*  if (omp_get_proc_bind() != omp_proc_bind_false) */
+#if _OPENMP >= 201511
+    int i,n;
+    n = 0;
+    ret = omp_get_num_places();
+    if (ret > 0) for (i=0;i<ret;i++) n+= omp_get_place_num_procs(i);
+    if (n > 0) nums = n;
+#endif
+    return (nums > 0 ? nums :2);
 #endif
 
+#if !defined(OS_LINUX)
+  return (nums > 0 ? nums :2);
+#endif
+	
 #if !defined(__GLIBC_PREREQ)
-  return nums;
+  return (nums > 0 ? nums :2);
 #else
  #if !__GLIBC_PREREQ(2, 3)
-  return nums;
+  return (nums > 0 ? nums :2);
  #endif
 
  #if !__GLIBC_PREREQ(2, 7)
   ret = sched_getaffinity(0,sizeof(cpuset), &cpuset);
-  if (ret!=0) return nums;
+  if (ret!=0) return (nums > 0 ? nums :2);
   n=0;
   #if !__GLIBC_PREREQ(2, 6)
-  for (i=0;i<nums;i++)
+  for (i=0;i<(nums > 0 ? nums :2);i++)
      if (CPU_ISSET(i,&cpuset)) n++;
   nums=n;
   #else
   nums = CPU_COUNT(sizeof(cpuset),&cpuset);
   #endif
-  return nums;
+  return (nums > 0 ? nums :2);
  #else
   if (nums >= CPU_SETSIZE) {
     cpusetp = CPU_ALLOC(nums);
       if (cpusetp == NULL) {
-        return nums;
+        return (nums > 0 ? nums :2);
       }
     size = CPU_ALLOC_SIZE(nums);
     ret = sched_getaffinity(0,size,cpusetp);
     if (ret!=0) {
       CPU_FREE(cpusetp);
-      return nums;
+      return (nums > 0 ? nums :2);
     }
     ret = CPU_COUNT_S(size,cpusetp);
     if (ret > 0 && ret < nums) nums = ret;
     CPU_FREE(cpusetp);
-    return nums;
+    return (nums > 0 ? nums :2);
   } else {
     ret = sched_getaffinity(0,sizeof(cpuset),&cpuset);
     if (ret!=0) {
-      return nums;
+      return (nums > 0 ? nums :2);
     }
     ret = CPU_COUNT(&cpuset);
     if (ret > 0 && ret < nums) nums = ret;
-    return nums;
+    return (nums > 0 ? nums :2);
   }
  #endif
 #endif
@@ -1972,7 +1999,7 @@ int  goto_get_num_procs  (void) {
   return blas_cpu_number;
 }
 
-void openblas_fork_handler()
+void openblas_fork_handler(void)
 {
   // This handler shuts down the OpenBLAS-managed PTHREAD pool when OpenBLAS is
   // built with "make USE_OPENMP=0".
@@ -1989,9 +2016,9 @@ void openblas_fork_handler()
 #endif
 }
 
-extern int openblas_num_threads_env();
-extern int openblas_goto_num_threads_env();
-extern int openblas_omp_num_threads_env();
+extern int openblas_num_threads_env(void);
+extern int openblas_goto_num_threads_env(void);
+extern int openblas_omp_num_threads_env(void);
 
 int blas_get_cpu_number(void){
 #if defined(OS_LINUX) || defined(OS_WINDOWS) || defined(OS_FREEBSD) || defined(OS_OPENBSD) || defined(OS_NETBSD) || defined(OS_DRAGONFLY) || defined(OS_DARWIN) || defined(OS_ANDROID) || defined(OS_HAIKU)
@@ -2854,32 +2881,28 @@ void *blas_memory_alloc(int procpos){
     position ++;
 
   } while (position < NUM_BUFFERS);
-#if (defined(SMP) || defined(USE_LOCKING)) && !defined(USE_OPENMP)
-  UNLOCK_COMMAND(&alloc_lock);
-#endif
+
   if (memory_overflowed) {
-#if (defined(SMP) || defined(USE_LOCKING)) && !defined(USE_OPENMP)
-  LOCK_COMMAND(&alloc_lock);
-#endif
-  do {
-    RMB;
+
+    do {
+      RMB;
 #if defined(USE_OPENMP)
-    if (!newmemory[position-NUM_BUFFERS].used) {
-      blas_lock(&newmemory[position-NUM_BUFFERS].lock);
+      if (!newmemory[position-NUM_BUFFERS].used) {
+        blas_lock(&newmemory[position-NUM_BUFFERS].lock);
 #endif
-      if (!newmemory[position-NUM_BUFFERS].used) goto allocation2;
+        if (!newmemory[position-NUM_BUFFERS].used) goto allocation2;
 
 #if defined(USE_OPENMP)
-      blas_unlock(&newmemory[position-NUM_BUFFERS].lock);
-    }
+        blas_unlock(&newmemory[position-NUM_BUFFERS].lock);
+      }
 #endif
-    position ++;
+      position ++;
 
-  } while (position < 512+NUM_BUFFERS);
+    } while (position < NEW_BUFFERS + NUM_BUFFERS);
+  }
 #if (defined(SMP) || defined(USE_LOCKING)) && !defined(USE_OPENMP)
   UNLOCK_COMMAND(&alloc_lock);
 #endif
-} 
   goto error;
 
   allocation :
@@ -2904,7 +2927,7 @@ void *blas_memory_alloc(int procpos){
 
       func = &memoryalloc[0];
 
-      while ((func != NULL) && (map_address == (void *) -1)) {
+      while ((*func != NULL) && (map_address == (void *) -1)) {
 
         map_address = (*func)((void *)base_address);
 
@@ -2984,12 +3007,18 @@ void *blas_memory_alloc(int procpos){
   return (void *)memory[position].addr;
 
  error:
+#if (defined(SMP) || defined(USE_LOCKING)) && !defined(USE_OPENMP)
+  LOCK_COMMAND(&alloc_lock);
+#endif
  if (memory_overflowed) goto terminate;
   fprintf(stderr,"OpenBLAS warning: precompiled NUM_THREADS exceeded, adding auxiliary array for thread metadata.\n");
+  fprintf(stderr,"To avoid this warning, please rebuild your copy of OpenBLAS with a larger NUM_THREADS setting\n");
+  fprintf(stderr,"or set the environment variable OPENBLAS_NUM_THREADS to %d or lower\n", MAX_CPU_NUMBER);
   memory_overflowed=1;
-  new_release_info = (struct release_t*) malloc(512*sizeof(struct release_t));
-  newmemory = (struct newmemstruct*) malloc(512*sizeof(struct newmemstruct));
-  for (i = 0; i < 512; i++) {
+  MB;
+  new_release_info = (struct release_t*) malloc(NEW_BUFFERS * sizeof(struct release_t));
+  newmemory = (struct newmemstruct*) malloc(NEW_BUFFERS * sizeof(struct newmemstruct));
+  for (i = 0; i < NEW_BUFFERS; i++) {
   newmemory[i].addr   = (void *)0;
 #if defined(WHEREAMI) && !defined(USE_OPENMP)
   newmemory[i].pos    = -1;
@@ -2997,7 +3026,6 @@ void *blas_memory_alloc(int procpos){
   newmemory[i].used   = 0;
   newmemory[i].lock   = 0;
 }
-  newmemory[position-NUM_BUFFERS].used = 1;
   
 allocation2:
   newmemory[position-NUM_BUFFERS].used = 1;
@@ -3015,7 +3043,7 @@ allocation2:
 
       func = &memoryalloc[0];
 
-      while ((func != NULL) && (map_address == (void *) -1)) {
+      while ((*func != NULL) && (map_address == (void *) -1)) {
 
         map_address = (*func)((void *)base_address);
 
@@ -3069,6 +3097,9 @@ allocation2:
   return (void *)newmemory[position-NUM_BUFFERS].addr;
 
 terminate:
+#if (defined(SMP) || defined(USE_LOCKING)) && !defined(USE_OPENMP)
+    UNLOCK_COMMAND(&alloc_lock);
+#endif
   printf("OpenBLAS : Program is Terminated. Because you tried to allocate too many memory regions.\n");
   printf("This library was built to support a maximum of %d threads - either rebuild OpenBLAS\n", NUM_BUFFERS);
   printf("with a larger NUM_THREADS value or set the environment variable OPENBLAS_NUM_THREADS to\n");
@@ -3100,12 +3131,12 @@ void blas_memory_free(void *free_area){
   printf("  Position : %d\n", position);
 #endif
   if (unlikely(memory_overflowed && position >= NUM_BUFFERS)) {
-    while ((position < NUM_BUFFERS+512) && (newmemory[position-NUM_BUFFERS].addr != free_area))
+    while ((position < NUM_BUFFERS+NEW_BUFFERS) && (newmemory[position-NUM_BUFFERS].addr != free_area))
       position++;
   // arm: ensure all writes are finished before other thread takes this memory
   WMB;
-
-  newmemory[position].used = 0;
+if (position - NUM_BUFFERS >= NEW_BUFFERS) goto error;
+  newmemory[position-NUM_BUFFERS].used = 0;
 #if (defined(SMP) || defined(USE_LOCKING)) && !defined(USE_OPENMP)
   UNLOCK_COMMAND(&alloc_lock);
 #endif
@@ -3184,7 +3215,7 @@ void blas_shutdown(void){
     memory[pos].lock   = 0;
   }
   if (memory_overflowed)
-    for (pos = 0; pos < 512; pos ++){
+    for (pos = 0; pos < NEW_BUFFERS; pos ++){
       newmemory[pos].addr   = (void *)0;
       newmemory[pos].used   = 0;
 #if defined(WHEREAMI) && !defined(USE_OPENMP)
@@ -3308,7 +3339,7 @@ static void gotoblas_memory_init(void) {
 /* Initialization for all function; this function should be called before main */
 
 static int gotoblas_initialized = 0;
-extern void openblas_read_env();
+extern void openblas_read_env(void);
 
 void CONSTRUCTOR gotoblas_init(void) {
 

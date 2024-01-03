@@ -68,6 +68,9 @@
 #endif
 
 int blas_server_avail = 0;
+int blas_omp_number_max = 0;
+
+extern int openblas_omp_adaptive_env(void);
 
 static void * blas_thread_buffer[MAX_PARALLEL_NUMBER][MAX_CPU_NUMBER];
 #ifdef HAVE_C11
@@ -76,7 +79,7 @@ static atomic_bool blas_buffer_inuse[MAX_PARALLEL_NUMBER];
 static _Bool blas_buffer_inuse[MAX_PARALLEL_NUMBER];
 #endif
 
-static void adjust_thread_buffers() {
+static void adjust_thread_buffers(void) {
 
   int i=0, j=0;
 
@@ -108,8 +111,6 @@ void goto_set_num_threads(int num_threads) {
 
   blas_cpu_number  = num_threads;
 
-  omp_set_num_threads(blas_cpu_number);
-
   adjust_thread_buffers();
 #if defined(ARCH_MIPS64)
   //set parameters for different number of threads.
@@ -123,6 +124,17 @@ void openblas_set_num_threads(int num_threads) {
 }
 
 int blas_thread_init(void){
+
+#if defined(__FreeBSD__) && defined(__clang__)
+extern int openblas_omp_num_threads_env(void);
+
+   if(blas_omp_number_max <= 0)
+	   blas_omp_number_max= openblas_omp_num_threads_env();
+   if (blas_omp_number_max <= 0) 
+	   blas_omp_number_max=MAX_CPU_NUMBER;
+#else
+    blas_omp_number_max = omp_get_max_threads();
+#endif
 
   blas_get_cpu_number();
 
@@ -282,8 +294,12 @@ static void exec_threads(blas_queue_t *queue, int buf_index){
   sb = queue -> sb;
 
 #ifdef CONSISTENT_FPCSR
+#ifdef __aarch64__
+  __asm__ __volatile__ ("msr fpcr, %0" : : "r" (queue -> sse_mode));
+#else
   __asm__ __volatile__ ("ldmxcsr %0" : : "m" (queue -> sse_mode));
   __asm__ __volatile__ ("fldcw %0"   : : "m" (queue -> x87_mode));
+#endif
 #endif
 
   if ((sa == NULL) && (sb == NULL) && ((queue -> mode & BLAS_PTHREAD) == 0)) {
@@ -381,8 +397,12 @@ int exec_blas(BLASLONG num, blas_queue_t *queue){
 
 #ifdef CONSISTENT_FPCSR
   for (i = 0; i < num; i ++) {
+#ifdef __aarch64__
+    __asm__ __volatile__ ("mrs %0, fpcr" : "=r" (queue[i].sse_mode));
+#else
     __asm__ __volatile__ ("fnstcw %0"  : "=m" (queue[i].x87_mode));
     __asm__ __volatile__ ("stmxcsr %0" : "=m" (queue[i].sse_mode));
+#endif
   }
 #endif
 
@@ -403,6 +423,7 @@ int exec_blas(BLASLONG num, blas_queue_t *queue){
       break;
   }
 
+if (openblas_omp_adaptive_env() != 0) {
 #pragma omp parallel for num_threads(num) schedule(OMP_SCHED)
   for (i = 0; i < num; i ++) {
 
@@ -412,6 +433,17 @@ int exec_blas(BLASLONG num, blas_queue_t *queue){
 
     exec_threads(&queue[i], buf_index);
   }
+} else {
+#pragma omp parallel for schedule(OMP_SCHED)
+  for (i = 0; i < num; i ++) {
+
+#ifndef USE_SIMPLE_THREADED_LEVEL3
+    queue[i].position = i;
+#endif
+
+    exec_threads(&queue[i], buf_index);
+  }
+}
 
 #ifdef HAVE_C11
   atomic_store(&blas_buffer_inuse[buf_index], false);

@@ -1,3 +1,4 @@
+//{
 /*********************************************************************/
 /* Copyright 2009, 2010 The University of Texas at Austin.           */
 /* All rights reserved.                                              */
@@ -193,7 +194,7 @@ static C_INLINE void xgetbv(int op, int * eax, int * edx){
 }
 #endif
 
-int support_avx(){
+int support_avx(void){
 #ifndef NO_AVX
   int eax, ebx, ecx, edx;
   int ret=0;
@@ -211,7 +212,7 @@ int support_avx(){
 #endif
 }
 
-int support_avx2(){
+int support_avx2(void){
 #ifndef NO_AVX2
   int eax, ebx, ecx=0, edx;
   int ret=0;
@@ -227,7 +228,7 @@ int support_avx2(){
 #endif
 }
 
-int support_avx512(){
+int support_avx512(void){
 #if !defined(NO_AVX) && !defined(NO_AVX512)
   int eax, ebx, ecx, edx;
   int ret=0;
@@ -249,7 +250,7 @@ int support_avx512(){
 #endif
 }
 
-int support_avx512_bf16(){
+int support_avx512_bf16(void){
 #if !defined(NO_AVX) && !defined(NO_AVX512)
   int eax, ebx, ecx, edx;
   int ret=0;
@@ -259,6 +260,31 @@ int support_avx512_bf16(){
   cpuid_count(7, 1, &eax, &ebx, &ecx, &edx);
   if((eax & 32) == 32){
       ret=1;  // CPUID.7.1:EAX[bit 5] indicates whether avx512_bf16 supported or not
+  }
+  return ret;
+#else
+  return 0;
+#endif
+}
+
+#define BIT_AMX_TILE	0x01000000
+#define BIT_AMX_BF16	0x00400000
+#define BIT_AMX_ENBD	0x00060000
+
+int support_amx_bf16(void) {
+#if !defined(NO_AVX) && !defined(NO_AVX512)
+  int eax, ebx, ecx, edx;
+  int ret=0;
+
+  if (!support_avx512())
+    return 0;
+  // CPUID.7.0:EDX indicates AMX support
+  cpuid_count(7, 0, &eax, &ebx, &ecx, &edx);
+  if ((edx & BIT_AMX_TILE) && (edx & BIT_AMX_BF16)) {
+    // CPUID.D.0:EAX[17:18] indicates AMX enabled
+    cpuid_count(0xd, 0, &eax, &ebx, &ecx, &edx);
+    if ((eax & BIT_AMX_ENBD) == BIT_AMX_ENBD)
+      ret = 1;
   }
   return ret;
 #else
@@ -297,9 +323,11 @@ int get_vendor(void){
 
 int get_cputype(int gettype){
   int eax, ebx, ecx, edx;
+/*
   int extend_family, family;
   int extend_model, model;
   int type, stepping;
+*/
   int feature = 0;
 
   cpuid(1, &eax, &ebx, &ecx, &edx);
@@ -353,6 +381,7 @@ int get_cputype(int gettype){
     if (support_avx2()) feature |= HAVE_AVX2;
     if (support_avx512()) feature |= HAVE_AVX512VL;
     if (support_avx512_bf16()) feature |= HAVE_AVX512BF16;
+    if (support_amx_bf16()) feature |= HAVE_AMXBF16;
     if ((ecx & (1 << 12)) != 0) feature |= HAVE_FMA3;
 #endif
 
@@ -401,7 +430,8 @@ int get_cacheinfo(int type, cache_info_t *cacheinfo){
   cpuid(0, &cpuid_level, &ebx, &ecx, &edx);
 
   if (cpuid_level > 1) {
-    int numcalls =0 ;
+    int numcalls;
+    
     cpuid(2, &eax, &ebx, &ecx, &edx);
     numcalls = BITMASK(eax, 0, 0xff); //FIXME some systems may require repeated calls to read all entries
     info[ 0] = BITMASK(eax,  8, 0xff);
@@ -1429,10 +1459,10 @@ int get_cpuname(void){
 	  return CPUTYPE_NEHALEM;
         }
       break;
-      case 9:
       case 8:      
         switch (model) {
         case 12: // Tiger Lake
+        case 13: // Tiger Lake (11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz)
           if(support_avx512())
             return CPUTYPE_SKYLAKEX;
           if(support_avx2())
@@ -1448,30 +1478,90 @@ int get_cpuname(void){
 	    return CPUTYPE_SANDYBRIDGE;
           else
 	    return CPUTYPE_NEHALEM;
-    }
-      case 10: //family 6 exmodel 10
-        switch (model) {
-    case 5: // Comet Lake H and S
-    case 6: // Comet Lake U
-          if(support_avx2())
-            return CPUTYPE_HASWELL;
-          if(support_avx())
-        return CPUTYPE_SANDYBRIDGE;
-          else
-        return CPUTYPE_NEHALEM;
-    case 7: // Rocket Lake           
-	  if(support_avx512())
+	case 15: // Sapphire Rapids
+	  if(support_amx_bf16())
+	    return CPUTYPE_SAPPHIRERAPIDS;
+	  if(support_avx512_bf16())
+            return CPUTYPE_COOPERLAKE;	
+          if(support_avx512())
             return CPUTYPE_SKYLAKEX;
           if(support_avx2())
             return CPUTYPE_HASWELL;
           if(support_avx())
 	    return CPUTYPE_SANDYBRIDGE;
 	  else
-	  return CPUTYPE_NEHALEM;
-	}
-	break;    
-      }
+	  return CPUTYPE_NEHALEM;	
+        }
       break;
+      case 9:
+        switch (model) {
+        case 7: // Alder Lake desktop
+        case 10: // Alder Lake mobile
+	  if(support_avx512_bf16())
+            return CPUTYPE_COOPERLAKE;	
+          if(support_avx512())
+            return CPUTYPE_SKYLAKEX;
+          if(support_avx2())
+            return CPUTYPE_HASWELL;
+          if(support_avx())
+            return CPUTYPE_SANDYBRIDGE;
+          else
+          return CPUTYPE_NEHALEM;
+        case 13: // Ice Lake NNPI
+          if(support_avx512())
+            return CPUTYPE_SKYLAKEX;
+          if(support_avx2())
+            return CPUTYPE_HASWELL;
+          if(support_avx())
+            return CPUTYPE_SANDYBRIDGE;
+          else
+          return CPUTYPE_NEHALEM;
+	case 14: // Kaby Lake and refreshes
+          if(support_avx2())
+            return CPUTYPE_HASWELL;
+          if(support_avx())
+	    return CPUTYPE_SANDYBRIDGE;
+          else
+	    return CPUTYPE_NEHALEM;
+        }
+      break;
+      case 10: //family 6 exmodel 10
+        switch (model) {
+          case 5: // Comet Lake H and S
+          case 6: // Comet Lake U
+            if(support_avx2())
+              return CPUTYPE_HASWELL;
+            if(support_avx())
+              return CPUTYPE_SANDYBRIDGE;
+            else
+              return CPUTYPE_NEHALEM;
+          case 7: // Rocket Lake           
+	    if(support_avx512())
+              return CPUTYPE_SKYLAKEX;
+            if(support_avx2())
+              return CPUTYPE_HASWELL;
+            if(support_avx())
+	      return CPUTYPE_SANDYBRIDGE;
+	    else
+	    return CPUTYPE_NEHALEM;
+        }
+        break;
+      case 11: //family 6 exmodel 11
+        switch (model) {
+          case 7: // Raptor Lake
+          case 10:
+          case 15:
+	  case 14: // Alder Lake N
+            if(support_avx2())
+              return CPUTYPE_HASWELL;
+	    if(support_avx())
+	      return CPUTYPE_SANDYBRIDGE;
+            else
+	      return CPUTYPE_NEHALEM;
+        }
+        break;
+      }
+      break;    
     case 0x7:
       return CPUTYPE_ITANIUM;
     case 0xf:
@@ -1570,8 +1660,13 @@ int get_cpuname(void){
 	  else
 	    return CPUTYPE_BARCELONA;
         }
-	break;	      
-      case 10: // Zen3		      
+      case 10: // Zen3/4
+#ifndef NO_AVX512
+          if(support_avx512_bf16())
+            return CPUTYPE_COOPERLAKE;
+          if(support_avx512())
+            return CPUTYPE_SKYLAKEX;
+#endif
 	if(support_avx())
 #ifndef NO_AVX2
 	    return CPUTYPE_ZEN;
@@ -1634,8 +1729,18 @@ int get_cpuname(void){
       if (model == 0xf && stepping < 0xe)
         return CPUTYPE_NANO;
       return CPUTYPE_NEHALEM;
+    case 0x7:
+      switch (exmodel) {
+      case 5:
+        if (support_avx2())
+          return CPUTYPE_ZEN;
+        else
+          return CPUTYPE_DUNNINGTON;
+      default:
+        return CPUTYPE_NEHALEM;
+      }
     default:
-      if (family >= 0x7)
+      if (family >= 0x8)
         return CPUTYPE_NEHALEM;
       else
         return CPUTYPE_VIAC3;
@@ -1643,7 +1748,20 @@ int get_cpuname(void){
   }
 
   if (vendor == VENDOR_ZHAOXIN){
-    return CPUTYPE_NEHALEM;
+    switch (family) {
+      case 0x7:
+        switch (exmodel) {
+        case 5:
+          if (support_avx2())
+            return CPUTYPE_ZEN;
+          else
+            return CPUTYPE_DUNNINGTON;
+        default:
+          return CPUTYPE_NEHALEM;
+        }
+      default:
+        return CPUTYPE_NEHALEM;
+    }
   }
 
   if (vendor == VENDOR_RISE){
@@ -1736,7 +1854,8 @@ static char *cpuname[] = {
   "ZEN",
   "SKYLAKEX",
   "DHYANA",
-  "COOPERLAKE"
+  "COOPERLAKE",
+  "SAPPHIRERAPIDS",
 };
 
 static char *lowercpuname[] = {
@@ -1793,7 +1912,8 @@ static char *lowercpuname[] = {
   "zen",
   "skylakex",
   "dhyana",
-  "cooperlake"
+  "cooperlake",
+  "sapphirerapids",
 };
 
 static char *corename[] = {
@@ -1827,7 +1947,8 @@ static char *corename[] = {
   "ZEN",
   "SKYLAKEX",
   "DHYANA",
-  "COOPERLAKE"
+  "COOPERLAKE",
+  "SAPPHIRERAPIDS",
 };
 
 static char *corename_lower[] = {
@@ -1861,7 +1982,8 @@ static char *corename_lower[] = {
   "zen",
   "skylakex",
   "dhyana",
-  "cooperlake"
+  "cooperlake",
+  "sapphirerapids",
 };
 
 
@@ -2042,32 +2164,7 @@ int get_coretype(void){
 	    return CORE_NEHALEM;
         }
         break;
-      case 10:
-        switch (model) {
-	  case 5: // Comet Lake H and S
-    	  case 6: // Comet Lake U
-            if(support_avx())
-  #ifndef NO_AVX2
-              return CORE_HASWELL;
-  #else
-              return CORE_SANDYBRIDGE;
-  #endif
-            else
-              return CORE_NEHALEM;
-	  case 7:// Rocket Lake
-#ifndef NO_AVX512
-	  if(support_avx512())
-            return CORE_SKYLAKEX;
-#endif
-#ifndef NO_AVX2
-	  if(support_avx2())
-            return CORE_HASWELL;
-#endif
-	  if(support_avx())
-	    return CORE_SANDYBRIDGE;
-	  else
-	  return CORE_NEHALEM;
-        }
+
       case 5:
         switch (model) {
 	case 6:
@@ -2121,6 +2218,7 @@ int get_coretype(void){
 	    return CORE_NEHALEM;
         }
 	break;
+
       case 6:
         if (model == 6)
 #ifndef NO_AVX512
@@ -2135,7 +2233,7 @@ int get_coretype(void){
 	  else
 	    return CORE_NEHALEM;
 #endif
-	if (model == 10)
+	if (model == 10 || model == 12)
 #ifndef NO_AVX512
 	  if(support_avx512_bf16())
             return CORE_COOPERLAKE;
@@ -2150,11 +2248,11 @@ int get_coretype(void){
 	  else
 	    return CORE_NEHALEM;
 #endif	
-        break;    	
+
       case 7:
         if (model == 10) 
             return CORE_NEHALEM;
-        if (model == 14)
+        if (model == 13 || model == 14) // Ice Lake
 #ifndef NO_AVX512
 	    return CORE_SKYLAKEX;
 #else
@@ -2168,9 +2266,9 @@ int get_coretype(void){
 	    return CORE_NEHALEM;
 #endif			
         break;    	
-      case 9:
+
       case 8:
-       if (model == 12) { // Tiger Lake
+        if (model == 12 || model == 13) { // Tiger Lake
           if(support_avx512())
             return CORE_SKYLAKEX;
           if(support_avx2())
@@ -2180,7 +2278,7 @@ int get_coretype(void){
           else
           return CORE_NEHALEM;
         }
-        if (model == 14) { // Kaby Lake 
+        if (model == 14) { // Kaby Lake mobile
 	  if(support_avx())
 #ifndef NO_AVX2
 	    return CORE_HASWELL;
@@ -2190,12 +2288,99 @@ int get_coretype(void){
 	  else
             return CORE_NEHALEM;
 	}
-      }
+        if (model == 15) { // Sapphire Rapids
+	  if(support_amx_bf16())
+	    return CORE_SAPPHIRERAPIDS;
+	  if(support_avx512_bf16())
+            return CORE_COOPERLAKE;	
+          if(support_avx512())
+            return CORE_SKYLAKEX;
+          if(support_avx2())
+            return CORE_HASWELL;
+          if(support_avx())
+	    return CORE_SANDYBRIDGE;
+	  else
+	  return CORE_NEHALEM;
+        }
       break;
 
+      case 9:
+        if (model == 7 || model == 10) { // Alder Lake
+          if(support_avx2())
+            return CORE_HASWELL;
+          if(support_avx())
+            return CORE_SANDYBRIDGE;
+          else
+          return CORE_NEHALEM;
+        }
+        if (model == 13) { // Ice Lake NNPI
+          if(support_avx512())
+            return CORE_SKYLAKEX;
+          if(support_avx2())
+            return CORE_HASWELL;
+          if(support_avx())
+            return CORE_SANDYBRIDGE;
+          else
+          return CORE_NEHALEM;
+        }
+        if (model == 14) { // Kaby Lake desktop
+	  if(support_avx())
+#ifndef NO_AVX2
+	    return CORE_HASWELL;
+#else
+	    return CORE_SANDYBRIDGE;
+#endif
+	  else
+            return CORE_NEHALEM;
+	}
+      break;
+
+      case 10:
+        switch (model) {
+	  case 5: // Comet Lake H and S
+    	  case 6: // Comet Lake U
+            if(support_avx())
+  #ifndef NO_AVX2
+              return CORE_HASWELL;
+  #else
+              return CORE_SANDYBRIDGE;
+  #endif
+            else
+              return CORE_NEHALEM;
+	  case 7:// Rocket Lake
+#ifndef NO_AVX512
+	  if(support_avx512())
+            return CORE_SKYLAKEX;
+#endif
+#ifndef NO_AVX2
+	  if(support_avx2())
+            return CORE_HASWELL;
+#endif
+	  if(support_avx())
+	    return CORE_SANDYBRIDGE;
+	  else
+	  return CORE_NEHALEM;
+        }
+
+      case 11:
+	switch (model) {
+	  case 7: // Raptor Lake
+          case 10:
+          case 15:
+	  case 14: // Alder Lake N	  
+#ifndef NO_AVX2
+	  if(support_avx2())
+            return CORE_HASWELL;
+#endif
+	  if(support_avx())
+	    return CORE_SANDYBRIDGE;
+	  else
+	  return CORE_NEHALEM;
+	}
       case 15:
 	if (model <= 0x2) return CORE_NORTHWOOD;
 	else return CORE_PRESCOTT;
+      }
     }
   }
 
@@ -2259,6 +2444,12 @@ int get_coretype(void){
 	  // Ryzen 2
 	default:
 	  // Matisse,Renoir Ryzen2 models		
+#ifndef NO_AVX512
+          if(support_avx512_bf16())
+            return CORE_COOPERLAKE;
+          if(support_avx512())
+            return CORE_SKYLAKEX;
+#endif
 	  if(support_avx())
 #ifndef NO_AVX2
 	    return CORE_ZEN;
@@ -2297,8 +2488,18 @@ int get_coretype(void){
       if (model == 0xf && stepping < 0xe)
         return CORE_NANO;
       return CORE_NEHALEM;
+    case 0x7:
+      switch (exmodel) {
+      case 5:
+        if (support_avx2())
+          return CORE_ZEN;
+        else
+          return CORE_DUNNINGTON;
+      default:
+        return CORE_NEHALEM;
+      }
     default:
-      if (family >= 0x7)
+      if (family >= 0x8)
         return CORE_NEHALEM;
       else
         return CORE_VIAC3;
@@ -2306,7 +2507,20 @@ int get_coretype(void){
   }
 
   if (vendor == VENDOR_ZHAOXIN) {
-     return CORE_NEHALEM;
+    switch (family) {
+      case 0x7:
+        switch (exmodel) {
+        case 5:
+          if (support_avx2())
+            return CORE_ZEN;
+          else
+            return CORE_DUNNINGTON;
+        default:
+          return CORE_NEHALEM;
+        }
+      default:
+        return CORE_NEHALEM;
+    }
   }
 
   return CORE_UNKNOWN;
@@ -2389,6 +2603,7 @@ void get_cpuconfig(void){
     if (features & HAVE_AVX2 )    printf("#define HAVE_AVX2\n");
     if (features & HAVE_AVX512VL )    printf("#define HAVE_AVX512VL\n");
     if (features & HAVE_AVX512BF16 )    printf("#define HAVE_AVX512BF16\n");
+    if (features & HAVE_AMXBF16 )    printf("#define HAVE_AMXBF16\n");
     if (features & HAVE_3DNOWEX) printf("#define HAVE_3DNOWEX\n");
     if (features & HAVE_3DNOW)   printf("#define HAVE_3DNOW\n");
     if (features & HAVE_FMA4 )    printf("#define HAVE_FMA4\n");
@@ -2460,9 +2675,11 @@ void get_sse(void){
   if (features & HAVE_AVX2 )    printf("HAVE_AVX2=1\n");
   if (features & HAVE_AVX512VL )    printf("HAVE_AVX512VL=1\n");
   if (features & HAVE_AVX512BF16 )    printf("HAVE_AVX512BF16=1\n");
+  if (features & HAVE_AMXBF16 )    printf("HAVE_AMXBF16=1\n");
   if (features & HAVE_3DNOWEX) printf("HAVE_3DNOWEX=1\n");
   if (features & HAVE_3DNOW)   printf("HAVE_3DNOW=1\n");
   if (features & HAVE_FMA4 )    printf("HAVE_FMA4=1\n");
   if (features & HAVE_FMA3 )    printf("HAVE_FMA3=1\n");
 
 }
+//}

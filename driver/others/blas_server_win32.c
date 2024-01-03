@@ -40,7 +40,7 @@
 #include <stdlib.h>
 #include "common.h"
 
-#if defined(OS_CYGWIN_NT) && !defined(unlikely)
+#if !defined(unlikely)
 #ifdef __GNUC__
 #define unlikely(x) __builtin_expect(!!(x), 0)
 #else
@@ -278,12 +278,15 @@ static DWORD WINAPI blas_thread_server(void *arg){
 	  } else
 #endif
 	    if ((queue -> mode & BLAS_PREC) == BLAS_DOUBLE){
+#ifdef BUILD_DOUBLE
 	      sb = (void *)(((BLASLONG)sa + ((DGEMM_P * DGEMM_Q * sizeof(double)
 					  + GEMM_ALIGN) & ~GEMM_ALIGN)) + GEMM_OFFSET_B);
-
+#endif
 	    } else if ((queue -> mode & BLAS_PREC) == BLAS_SINGLE) {
+#ifdef BUILD_SINGLE
 	      sb = (void *)(((BLASLONG)sa + ((SGEMM_P * SGEMM_Q * sizeof(float)
 					  + GEMM_ALIGN) & ~GEMM_ALIGN)) + GEMM_OFFSET_B);
+#endif
 	    } else {
             /* Other types in future */
 	    }
@@ -295,11 +298,15 @@ static DWORD WINAPI blas_thread_server(void *arg){
 	  } else
 #endif
 	    if ((queue -> mode & BLAS_PREC) == BLAS_DOUBLE){
+#ifdef BUILD_COMPLEX16
 	      sb = (void *)(((BLASLONG)sa + ((ZGEMM_P * ZGEMM_Q * 2 * sizeof(double)
 					  + GEMM_ALIGN) & ~GEMM_ALIGN)) + GEMM_OFFSET_B);
+#endif
 	    } else if ((queue -> mode & BLAS_PREC) == BLAS_SINGLE) {
+#ifdef BUILD_COMPLEX
 	      sb = (void *)(((BLASLONG)sa + ((CGEMM_P * CGEMM_Q * 2 * sizeof(float)
 					  + GEMM_ALIGN) & ~GEMM_ALIGN)) + GEMM_OFFSET_B);
+#endif
 	    } else {
             /* Other types in future */
 	    }
@@ -391,8 +398,9 @@ int blas_thread_init(void){
 
 int exec_blas_async(BLASLONG pos, blas_queue_t *queue){
 
-#if defined(SMP_SERVER) && defined(OS_CYGWIN_NT)
+#if defined(SMP_SERVER)
   // Handle lazy re-init of the thread-pool after a POSIX fork
+  // on Cygwin or as delayed init when a static library	is used
   if (unlikely(blas_server_avail == 0)) blas_thread_init();
 #endif
 
@@ -560,7 +568,7 @@ void goto_set_num_threads(int num_threads)
 			blas_server_avail = 1;
 		}
 
-		for(i = blas_num_threads - 1; i < num_threads - 1; i++){
+		for(i = (blas_num_threads > 0) ? blas_num_threads - 1 : 0; i < num_threads - 1; i++){
 
 			blas_threads[i] = CreateThread(NULL, 0,
 				     blas_thread_server, (void *)i,

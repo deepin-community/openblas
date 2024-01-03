@@ -28,12 +28,19 @@ set(BLAS1_MANGLED_SOURCES
 # these all have 'z' sources for complex versions
 set(BLAS2_SOURCES
   gemv.c ger.c
-  trsv.c trmv.c symv.c
-  syr.c syr2.c gbmv.c
-  sbmv.c spmv.c
-  spr.c spr2.c
+  trsv.c trmv.c 
+  syr2.c gbmv.c
+  sbmv.c 
+  spr2.c
   tbsv.c tbmv.c
   tpsv.c tpmv.c
+)
+
+set(BLAS2_REAL_ONLY_SOURCES
+  symv.c syr.c spmv.c spr.c
+)
+set(BLAS2_COMPLEX_LAPACK_SOURCES
+  symv.c syr.c spmv.c spr.c
 )
 
 set(BLAS2_COMPLEX_ONLY_MANGLED_SOURCES
@@ -46,7 +53,7 @@ set(BLAS2_COMPLEX_ONLY_MANGLED_SOURCES
 # these do not have separate 'z' sources
 set(BLAS3_SOURCES
   gemm.c symm.c
-  trsm.c syrk.c syr2k.c
+  trsm.c syrk.c syr2k.c gemmt.c
 )
 
 set(BLAS3_MANGLED_SOURCES
@@ -78,6 +85,10 @@ foreach (CBLAS_FLAG ${CBLAS_FLAGS})
   GenerateNamedObjects("${BLAS1_REAL_ONLY_SOURCES}" "" "" ${CBLAS_FLAG} "" "" false 1)
   GenerateNamedObjects("${BLAS1_MANGLED_SOURCES}" "" "" ${CBLAS_FLAG} "" "" false ${MANGLE_COMPLEX})
   GenerateNamedObjects("${BLAS2_SOURCES}" "" "" ${CBLAS_FLAG} "" "" false ${MANGLE_COMPLEX})
+  GenerateNamedObjects("${BLAS2_REAL_ONLY_SOURCES}" "" "" ${CBLAS_FLAG} "" "" false 1)
+  if (NOT DEFINED NO_LAPACK)
+  GenerateNamedObjects("${BLAS2_COMPLEX_LAPACK_SOURCES}" "" "" ${CBLAS_FLAG} "" "" false ${MANGLE_COMPLEX})
+  endif ()
   GenerateNamedObjects("${BLAS2_COMPLEX_ONLY_MANGLED_SOURCES}" "" "" ${CBLAS_FLAG} "" "" false 4)
   GenerateNamedObjects("${BLAS3_SOURCES}" "" "" ${CBLAS_FLAG} "" "" false ${DISABLE_COMPLEX})
   GenerateNamedObjects("${BLAS3_MANGLED_SOURCES}" "" "" ${CBLAS_FLAG} "" "" false ${MANGLE_COMPLEX})
@@ -178,7 +189,16 @@ if (NOT DEFINED NO_LAPACK)
   )
 
   GenerateNamedObjects("${LAPACK_SOURCES}")
+  if (NOT RELAPACK_REPLACE)
   GenerateNamedObjects("${LAPACK_MANGLED_SOURCES}" "" "" 0 "" "" 0 3)
+  else ()
+  GenerateNamedObjects("lapack/getrs.c" "" "" 0 "" "" 0 3)
+  GenerateNamedObjects("lapack/getf2.c" "" "" 0 "" "" 0 3)
+  GenerateNamedObjects("lapack/potf2.c" "" "" 0 "" "" 0 3)
+  GenerateNamedObjects("lapack/laswp.c" "" "" 0 "" "" 0 3)
+  GenerateNamedObjects("lapack/lauu2.c" "" "" 0 "" "" 0 3)
+  GenerateNamedObjects("lapack/trti2.c" "" "" 0 "" "" 0 3)
+  endif()
 endif ()
 
 if ( BUILD_COMPLEX AND NOT  BUILD_SINGLE)

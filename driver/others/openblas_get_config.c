@@ -60,19 +60,22 @@ static char* openblas_config_str=""
 #ifdef USE_OPENMP
   "USE_OPENMP "
 #endif
+#ifdef USE_TLS
+  "USE_TLS "
+#endif
 #ifndef DYNAMIC_ARCH
   CHAR_CORENAME
 #endif
   ;
 
 #ifdef DYNAMIC_ARCH
-char *gotoblas_corename();
+char *gotoblas_corename(void);
 #endif
 
 static char tmp_config_str[256];
-int openblas_get_parallel();
+int openblas_get_parallel(void);
 
-char* CNAME() {
+char* CNAME(void) {
 char tmpstr[20];
   strcpy(tmp_config_str, openblas_config_str);
 #ifdef DYNAMIC_ARCH
@@ -87,7 +90,7 @@ char tmpstr[20];
 }
 
 
-char* openblas_get_corename() {
+char* openblas_get_corename(void) {
 #ifndef DYNAMIC_ARCH 
   return CHAR_CORENAME;
 #else

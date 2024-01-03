@@ -43,9 +43,9 @@
 
 #define MB  asm("mb")
 #define WMB asm("wmb")
-#define RMB asm("rmb")
+#define RMB asm("mb")
 
-static void __inline blas_lock(unsigned long *address){
+static __inline void blas_lock(unsigned long *address){
 #ifndef __DECC
   unsigned long tmp1, tmp2;
   asm volatile(

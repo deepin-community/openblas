@@ -13,12 +13,22 @@ MAKE_OPTIONS := NO_LAPACKE=1 NO_AFFINITY=1 NO_WARMUP=1 CFLAGS="$(CPPFLAGS) $(CFL
 # Avoid having -O2 automatically added (especially for DEB_BUILD_OPTIONS=noopt)
 MAKE_OPTIONS += COMMON_OPT=
 
+# Handle requested number of parallel jobs
+# NB: by default, the OpenBLAS build system uses as many jobs as there are logical
+# cores, so explicitly disable this if parallel build is not requested.
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	MAKE_OPTIONS += MAKE_NB_JOBS=$(NUMJOBS)
+else
+	MAKE_OPTIONS += NO_PARALLEL_MAKE=1
+endif
+
 # Build generic package with hardcoded max number of threads of 64
 GENERIC_OPTIONS := NUM_THREADS=64
 
 # Architectures with dynamic arch selection
 # TARGET=GENERIC is needed to avoid FTBFS when CPU detection fails (see #923607)
-ENABLE_DYNAMIC_ARCHS := amd64 arm64 i386 kfreebsd-amd64 kfreebsd-i386 ppc64el s390x
+ENABLE_DYNAMIC_ARCHS := amd64 arm64 i386 ppc64el s390x loong64
 ifneq (,$(filter $(DEB_HOST_ARCH),$(ENABLE_DYNAMIC_ARCHS)))
 	GENERIC_OPTIONS += DYNAMIC_ARCH=1 DYNAMIC_OLDER=1 TARGET=GENERIC
 endif
@@ -43,7 +53,7 @@ TARGET_OPTION_powerpc   = TARGET=PPCG4
 TARGET_OPTION_ppc64     = TARGET=POWER4
 # We do not use DYNAMIC_ARCH selection on mips64el because it only works for
 # Loongson3R3/3R4
-TARGET_OPTION_mips64el  = TARGET=SICORTEX
+TARGET_OPTION_mips64el  = TARGET=MIPS64_GENERIC
 TARGET_OPTION_riscv64   = TARGET=RISCV64_GENERIC
 TARGET_OPTION_sparc64   = TARGET=SPARC
 GENERIC_OPTIONS += $(TARGET_OPTION_$(DEB_HOST_ARCH))
@@ -71,8 +81,6 @@ FLAGS_0-serial     := USE_THREAD=0 USE_OPENMP=0 INTERFACE64=0 LIBPREFIX=libopenb
 FLAGS_64-0-pthread := USE_THREAD=1 USE_OPENMP=0 INTERFACE64=1 LIBPREFIX=libopenblas64 FCOMMON_OPT='-frecursive -fdefault-integer-8'
 FLAGS_64-0-openmp  := USE_THREAD=1 USE_OPENMP=1 INTERFACE64=1 LIBPREFIX=libopenblas64 FCOMMON_OPT='-frecursive -fopenmp -fdefault-integer-8'
 FLAGS_64-0-serial  := USE_THREAD=0 USE_OPENMP=0 INTERFACE64=1 LIBPREFIX=libopenblas64 FCOMMON_OPT='-frecursive -fdefault-integer-8'
-FLAGS_julia        := USE_THREAD=1 USE_OPENMP=0 INTERFACE64=1 LIBPREFIX=libopenblas64_ FCOMMON_OPT='-frecursive -fdefault-integer-8' \
-	SYMBOLSUFFIX=64_ GEMM_MULTITHREADING_THRESHOLD=50 NO_AFFINITY=1
 
 # Priority values in the Update-Alternatives mechanism.
 # O,P,S stands for openmp, pthread, serial respectively
@@ -85,12 +93,6 @@ UAPRI_S = 90
 	dh $@
 
 override_dh_auto_configure: $(addprefix config_, $(FLAVORS))
-ifneq (,$(filter $(DEB_HOST_ARCH), amd64 arm64 ppc64el))
-ifeq (,$(filter custom,$(DEB_BUILD_OPTIONS)))
-	# shared object package for Julia's custom use
-	mkdir julia; cp -r $(SRCS) julia/;
-endif
-endif
 	:
 
 config_%:
@@ -137,12 +139,6 @@ config_%:
 override_dh_auto_build:
 	for target in $(addprefix build_, $(FLAVORS)); do \
 		$(MAKE) -f debian/rules $$target || exit 1; done
-ifneq (,$(filter $(DEB_HOST_ARCH), amd64 arm64 ppc64el))
-ifeq (,$(filter custom,$(DEB_BUILD_OPTIONS)))
-	# shared object package for Julia's custom use
-	$(MAKE) -C julia libs netlib shared $(MAKE_OPTIONS) $(FLAGS_julia)
-endif
-endif
 
 build_0-pthread:
 	$(MAKE) -C 0-pthread libs netlib shared $(MAKE_OPTIONS) $(FLAGS_0-pthread)
@@ -171,12 +167,6 @@ override_dh_auto_test:
 ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
 	for target in $(addprefix test_, $(FLAVORS)); do \
 		$(MAKE) -f debian/rules $$target || exit 1; done
-ifneq (,$(filter $(DEB_HOST_ARCH), amd64 arm64 ppc64el))
-ifeq (,$(filter custom,$(DEB_BUILD_OPTIONS)))
-	# shared object package for Julia's custom use
-	$(MAKE) -C julia tests $(MAKE_OPTIONS) $(FLAGS_julia)
-endif
-endif
 endif
 
 test_0-pthread:
@@ -200,24 +190,17 @@ override_dh_auto_install:
 		$(MAKE) -f debian/rules $$target || exit 1; done
 	# change the inclusion for the 64-bit variant
 	find debian/tmp -type f -path '*openblas64*' -exec sed -i -e 's/openblas_config.h/openblas64_config.h/g' '{}' \;
-ifneq (,$(filter $(DEB_HOST_ARCH), amd64 arm64 ppc64el))
-ifeq (,$(filter custom,$(DEB_BUILD_OPTIONS)))
-	# shared object package for Julia's custom use
-	mkdir -p debian/libjulia-openblas64/usr/lib/$(DEB_HOST_MULTIARCH)/julia/
-	cp -dv julia/libopenblas64_*so* debian/libjulia-openblas64/usr/lib/$(DEB_HOST_MULTIARCH)/julia/
-endif
-endif
 
 install_%:
 	$(MAKE) -C $* install $(MAKE_OPTIONS) $(FLAGS_$*) \
 		DESTDIR=../debian/tmp/ PREFIX=/usr \
 		OPENBLAS_INCLUDE_DIR=/usr/include/$(DEB_HOST_MULTIARCH)/openblas$(subst $(SOVER)-,-,$(subst -$(SOVER)-,-,$*))/ \
 		OPENBLAS_LIBRARY_DIR=/usr/lib/$(DEB_HOST_MULTIARCH)/openblas$(subst $(SOVER)-,-,$(subst -$(SOVER)-,-,$*))/
-	# Fix the content of openblas.pc for 64-bit indexing
+	# Fix the content of openblas64.pc for 64-bit indexing
 	if test -n "$$(echo $* | grep 64)"; then \
-		sed -i -e "s/-lopenblas/-lopenblas64/" \
+		sed -i -e "s/^libsuffix=.*$$/libsuffix=64/" \
 			-e "s/Name: openblas$$/Name: openblas64/" \
-			debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/openblas$(subst $(SOVER)-,-,$(subst -$(SOVER)-,-,$*))/pkgconfig/openblas.pc; \
+			debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/openblas$(subst $(SOVER)-,-,$(subst -$(SOVER)-,-,$*))/pkgconfig/openblas64.pc; \
 	fi
 	# Add blas-openblas.pc and lapack-openblas.pc
 	for f in blas-openblas lapack-openblas; do \
@@ -228,6 +211,9 @@ install_%:
 			< debian/$${f}.pc.in \
 			> debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/openblas$(subst $(SOVER)-,-,$(subst -$(SOVER)-,-,$*))/pkgconfig/$${f}.pc; \
 	done
+
+override_dh_auto_clean:
+	$(MAKE) $(MAKE_OPTIONS) clean
 
 execute_after_dh_clean:
 	for flavour in openmp pthread serial; do \
@@ -243,7 +229,6 @@ execute_after_dh_clean:
 				debian/libopenblas64-$${flavour}-dev.$$i; \
 		done; \
 	done
-	rm -rf julia
 
 # Needed to avoid a dependency on metapackage libopenblas0 from
 # flavour-specific packages, since lib{blas,lapack}.so.3 is dynamically linked

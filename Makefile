@@ -25,21 +25,28 @@ ifeq ($(NO_FORTRAN), 1)
 define NOFORTRAN
 1
 endef
-define NO_LAPACK
+ifneq ($(NO_LAPACK), 1)
+define C_LAPACK
 1
 endef
+endif
 export NOFORTRAN
 export NO_LAPACK
+export C_LAPACK
 endif
 
-LAPACK_NOOPT := $(filter-out -O0 -O1 -O2 -O3 -Ofast,$(LAPACK_FFLAGS))
+ifeq ($(F_COMPILER),CRAY)
+LAPACK_NOOPT := $(filter-out -O0 -O1 -O2 -O3 -Ofast -Og -Os,$(LAPACK_FFLAGS))
+else
+LAPACK_NOOPT := $(filter-out -O0 -O1 -O2 -O3 -Ofast -O -Og -Os,$(LAPACK_FFLAGS))
+endif
 
 SUBDIRS_ALL = $(SUBDIRS) test ctest utest exports benchmark ../laswp ../bench cpp_thread_test
 
 .PHONY : all libs netlib $(RELA) test ctest shared install
-.NOTPARALLEL : all libs $(RELA) prof lapack-test install blas-test
+.NOTPARALLEL : shared
 
-all :: libs netlib $(RELA) tests shared
+all :: tests
 	@echo
 	@echo " OpenBLAS build complete. ($(LIB_COMPONENTS))"
 	@echo
@@ -107,6 +114,10 @@ ifeq ($(OSNAME), Darwin)
 	@echo "\"make PREFIX=/your_installation_path/ install\"."
 	@echo
 	@echo "(or set PREFIX in Makefile.rule and run make install."
+	@echo
+	@echo "Note that any flags passed to make during build should also be passed to make install"
+	@echo "to circumvent any install errors."
+	@echo
 	@echo "If you want to move the .dylib to a new location later, make sure you change"
 	@echo "the internal name of the dylib with:"
 	@echo
@@ -115,8 +126,11 @@ endif
 	@echo
 	@echo "To install the library, you can run \"make PREFIX=/path/to/your/installation install\"."
 	@echo
+	@echo "Note that any flags passed to make during build should also be passed to make install"
+	@echo "to circumvent any install errors."
+	@echo
 
-shared :
+shared : libs netlib $(RELA)
 ifneq ($(NO_SHARED), 1)
 ifeq ($(OSNAME), $(filter $(OSNAME),Linux SunOS Android Haiku FreeBSD DragonFly))
 	@$(MAKE) -C exports so
@@ -140,18 +154,22 @@ ifeq ($(OSNAME), CYGWIN_NT)
 endif
 endif
 
-tests :
+tests : shared
 ifeq ($(NOFORTRAN), $(filter 0,$(NOFORTRAN)))
 	touch $(LIBNAME)
 ifndef NO_FBLAS
 	$(MAKE) -C test all
 endif
+endif
+ifneq ($(ONLY_CBLAS), 1)
 	$(MAKE) -C utest all
+endif
 ifneq ($(NO_CBLAS), 1)
+ifneq ($(ONLY_CBLAS), 1)
 	$(MAKE) -C ctest all
+endif
 ifeq ($(CPP_THREAD_SAFETY_TEST), 1)
 	$(MAKE) -C cpp_thread_test all
-endif
 endif
 endif
 
@@ -160,7 +178,7 @@ ifeq ($(CORE), UNKNOWN)
 	$(error OpenBLAS: Detecting CPU failed. Please set TARGET explicitly, e.g. make TARGET=your_cpu_target. Please read README for the detail.)
 endif
 ifeq ($(NOFORTRAN), 1)
-	$(info OpenBLAS: Detecting fortran compiler failed. Cannot compile LAPACK. Only compile BLAS.)
+	$(info OpenBLAS: Detecting fortran compiler failed. Can only compile BLAS and f2c-converted LAPACK.)
 endif
 ifeq ($(NO_STATIC), 1)
 ifeq ($(NO_SHARED), 1)
@@ -192,9 +210,25 @@ ifeq ($(DYNAMIC_OLDER), 1)
 	@echo DYNAMIC_OLDER=1 >> Makefile.conf_last
 endif	
 endif
+	@echo TARGET=$(CORE) >> Makefile.conf_last
 ifdef USE_THREAD
 	@echo USE_THREAD=$(USE_THREAD) >>  Makefile.conf_last
 endif
+ifdef SMP
+ifdef NUM_THREADS
+	@echo NUM_THREADS=$(NUM_THREADS) >>  Makefile.conf_last
+else
+	@echo NUM_THREADS=$(NUM_CORES) >>  Makefile.conf_last
+endif
+endif
+ifeq ($(USE_OPENMP),1)
+	@echo USE_OPENMP=1 >>  Makefile.conf_last
+endif
+ifeq ($(INTERFACE64),1)
+	@echo INTERFACE64=1 >>  Makefile.conf_last
+endif
+	@echo THELIBNAME=$(LIBNAME) >>  Makefile.conf_last
+	@echo THELIBSONAME=$(LIBSONAME) >>  Makefile.conf_last
 	@-ln -fs $(LIBNAME) $(LIBPREFIX).$(LIBSUFFIX)
 	@touch lib.grd
 
@@ -241,18 +275,13 @@ hpl_p :
 	fi; \
 	done
 
-ifeq ($(NO_LAPACK), 1)
-netlib :
-
-else
 netlib : lapack_prebuild
-ifeq ($(NOFORTRAN), $(filter 0,$(NOFORTRAN)))
+ifneq ($(NO_LAPACK), 1)
 	@$(MAKE) -C $(NETLIB_LAPACK_DIR) lapacklib
 	@$(MAKE) -C $(NETLIB_LAPACK_DIR) tmglib
 endif
 ifneq ($(NO_LAPACKE), 1)
 	@$(MAKE) -C $(NETLIB_LAPACK_DIR) lapackelib
-endif
 endif
 
 ifeq ($(NO_LAPACK), 1)
@@ -267,9 +296,13 @@ prof_lapack : lapack_prebuild
 	@$(MAKE) -C $(NETLIB_LAPACK_DIR) lapack_prof
 
 lapack_prebuild :
-ifeq ($(NOFORTRAN), $(filter 0,$(NOFORTRAN)))
+ifeq ($(NO_LAPACK), $(filter 0,$(NO_LAPACK)))
 	-@echo "FC          = $(FC)" > $(NETLIB_LAPACK_DIR)/make.inc
+ifeq ($(F_COMPILER), GFORTRAN)
+	-@echo "override FFLAGS      = $(LAPACK_FFLAGS) -fno-tree-vectorize" >> $(NETLIB_LAPACK_DIR)/make.inc
+else
 	-@echo "override FFLAGS      = $(LAPACK_FFLAGS)" >> $(NETLIB_LAPACK_DIR)/make.inc
+endif
 	-@echo "FFLAGS_DRV  = $(LAPACK_FFLAGS)" >> $(NETLIB_LAPACK_DIR)/make.inc
 	-@echo "POPTS       = $(LAPACK_FPFLAGS)" >> $(NETLIB_LAPACK_DIR)/make.inc
 	-@echo "FFLAGS_NOOPT       = -O0 $(LAPACK_NOOPT)" >> $(NETLIB_LAPACK_DIR)/make.inc
@@ -360,10 +393,10 @@ ifneq ($(CROSS), 1)
 	(cd $(NETLIB_LAPACK_DIR); ./lapack_testing.py -r -b TESTING)
 endif
 
-lapack-runtest:
+lapack-runtest: lapack-test
 	( cd $(NETLIB_LAPACK_DIR)/INSTALL; ./testlsame; ./testslamch; ./testdlamch; \
         ./testsecond; ./testdsecnd; ./testieee; ./testversion )
-	(cd $(NETLIB_LAPACK_DIR); ./lapack_testing.py -r )
+	(cd $(NETLIB_LAPACK_DIR); ./lapack_testing.py -r -b TESTING )
 
 
 blas-test:

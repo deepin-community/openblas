@@ -44,6 +44,10 @@ COMPILER_DEC
 COMPILER_GNU
 #endif
 
+#if defined(__fcc_version__) || defined(__FCC_version__)
+COMPILER_FUJITSU
+#endif
+
 #if defined(__ANDROID__)
 OS_ANDROID
 #endif
@@ -163,5 +167,14 @@ ARCH_LOONGARCH64
 
 #if (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L)
 HAVE_C11
+#endif
+
+#if defined(__e2k__)
+ARCH_E2K
+#endif
+
+#if defined(__EMSCRIPTEN__)
+ARCH_RISCV64
+OS_WINDOWS
 #endif
 

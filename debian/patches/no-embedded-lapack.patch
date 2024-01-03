@@ -8,49 +8,46 @@ Last-Update: 2017-07-27
 This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
 --- a/Makefile
 +++ b/Makefile
-@@ -241,92 +241,21 @@ hpl_p :
+@@ -275,91 +275,20 @@ hpl_p :
  	fi; \
  	done
  
--ifeq ($(NO_LAPACK), 1)
- netlib :
--
--else
 -netlib : lapack_prebuild
--ifeq ($(NOFORTRAN), $(filter 0,$(NOFORTRAN)))
+-ifneq ($(NO_LAPACK), 1)
 -	@$(MAKE) -C $(NETLIB_LAPACK_DIR) lapacklib
 -	@$(MAKE) -C $(NETLIB_LAPACK_DIR) tmglib
 -endif
 -ifneq ($(NO_LAPACKE), 1)
 -	@$(MAKE) -C $(NETLIB_LAPACK_DIR) lapackelib
-+ifeq (,$(findstring 64,$(LIBNAME)))
-+	mkdir lapack-netlib
-+	cd lapack-netlib && ar -x /usr/lib/$$(dpkg-architecture -q DEB_HOST_MULTIARCH)/liblapack_pic.a
-+	make -C interface delete-duplicate-lapack-objects
-+	ar -ru $(LIBNAME) `LC_ALL=C ls lapack-netlib/*`
-+else
-+	mkdir lapack64-netlib
-+	cd lapack64-netlib && ar -x /usr/lib/$$(dpkg-architecture -q DEB_HOST_MULTIARCH)/liblapack64_pic.a
-+	make -C interface delete-duplicate-lapack-objects
-+	ar -ru $(LIBNAME) `LC_ALL=C ls lapack64-netlib/*`
- endif
 -endif
 -
 -ifeq ($(NO_LAPACK), 1)
 -re_lapack :
++netlib : lapack-netlib
  
--else
++lapack-netlib:
++	mkdir lapack-netlib
++ifeq (,$(filter libopenblas64%,$(LIBNAME)))
++	cd lapack-netlib && ar -x /usr/lib/$$(dpkg-architecture -q DEB_HOST_MULTIARCH)/liblapack_pic.a
+ else
 -re_lapack :
 -	@$(MAKE) -C relapack
--endif
--
++	cd lapack-netlib && ar -x /usr/lib/$$(dpkg-architecture -q DEB_HOST_MULTIARCH)/liblapack64_pic.a
+ endif
++	make -C interface delete-duplicate-lapack-objects
++	ar -ru $(LIBNAME) `LC_ALL=C ls lapack-netlib/*`
+ 
 -prof_lapack : lapack_prebuild
 -	@$(MAKE) -C $(NETLIB_LAPACK_DIR) lapack_prof
 -
 -lapack_prebuild :
--ifeq ($(NOFORTRAN), $(filter 0,$(NOFORTRAN)))
+-ifeq ($(NO_LAPACK), $(filter 0,$(NO_LAPACK)))
 -	-@echo "FC          = $(FC)" > $(NETLIB_LAPACK_DIR)/make.inc
+-ifeq ($(F_COMPILER), GFORTRAN)
+-	-@echo "override FFLAGS      = $(LAPACK_FFLAGS) -fno-tree-vectorize" >> $(NETLIB_LAPACK_DIR)/make.inc
+-else
 -	-@echo "override FFLAGS      = $(LAPACK_FFLAGS)" >> $(NETLIB_LAPACK_DIR)/make.inc
+-endif
 -	-@echo "FFLAGS_DRV  = $(LAPACK_FFLAGS)" >> $(NETLIB_LAPACK_DIR)/make.inc
 -	-@echo "POPTS       = $(LAPACK_FPFLAGS)" >> $(NETLIB_LAPACK_DIR)/make.inc
 -	-@echo "FFLAGS_NOOPT       = -O0 $(LAPACK_NOOPT)" >> $(NETLIB_LAPACK_DIR)/make.inc
@@ -113,7 +110,7 @@ This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
  
  large.tgz :
  ifeq ($(NOFORTRAN), $(filter 0,$(NOFORTRAN)))
-@@ -393,10 +322,5 @@ ifeq ($(OSNAME), Darwin)
+@@ -426,10 +355,5 @@ ifeq ($(OSNAME), Darwin)
  endif
  	@rm -f Makefile.conf config.h Makefile_kernel.conf config_kernel.h st* *.dylib
  	@rm -f cblas.tmp cblas.tmp2
@@ -126,7 +123,7 @@ This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
  	@echo Done.
 --- a/Makefile.system
 +++ b/Makefile.system
-@@ -41,8 +41,6 @@ else ifeq ($(ARCH), zarch)
+@@ -44,8 +44,6 @@ else ifeq ($(ARCH), zarch)
  override ARCH=zarch
  endif
  
@@ -137,7 +134,7 @@ This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
  # - CC is an implicit variable so neither '?=' or 'ifndef' can be used.
 --- a/interface/Makefile
 +++ b/interface/Makefile
-@@ -2335,3 +2335,11 @@ cblas_zgeadd.$(SUFFIX) cblas_zgeadd.$(PS
+@@ -2384,3 +2384,9 @@ cblas_zgeadd.$(SUFFIX) cblas_zgeadd.$(PS
  cblas_xerbla.$(SUFFIX) cblas_xerbla.$(PSUFFIX) : xerbla.c
  	$(CC) -c $(CFLAGS) -DCBLAS $< -o $(@F)
  
@@ -147,15 +144,13 @@ This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
 +delete-duplicate-lapack-objects:
 +	if test -d ../lapack-netlib; then cd ../lapack-netlib \
 +		&& rm $(SLAPACKOBJS) $(DLAPACKOBJS) $(CLAPACKOBJS) $(ZLAPACKOBJS) lsame.o xerbla.o; fi
-+	if test -d ../lapack64-netlib; then cd ../lapack64-netlib \
-+		&& rm $(SLAPACKOBJS) $(DLAPACKOBJS) $(CLAPACKOBJS) $(ZLAPACKOBJS) lsame.o xerbla.o; fi
 --- a/Makefile.install
 +++ b/Makefile.install
-@@ -72,15 +72,6 @@ endif
+@@ -85,15 +85,6 @@ endif
  endif
  
  ifneq ($(OSNAME), AIX)
--ifndef NO_LAPACKE
+-ifneq ($(NO_LAPACKE), 1)
 -	@echo Copying LAPACKE header files to $(DESTDIR)$(OPENBLAS_INCLUDE_DIR)
 -	@-install -m644 $(NETLIB_LAPACK_DIR)/LAPACKE/include/lapack.h "$(DESTDIR)$(OPENBLAS_INCLUDE_DIR)/lapack.h"
 -	@-install -m644 $(NETLIB_LAPACK_DIR)/LAPACKE/include/lapacke.h "$(DESTDIR)$(OPENBLAS_INCLUDE_DIR)/lapacke.h"

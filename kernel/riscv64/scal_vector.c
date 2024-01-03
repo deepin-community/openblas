@@ -30,20 +30,20 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define VSETVL(n) vsetvl_e32m8(n)
 #define VSETVL_MAX vsetvlmax_e32m1()
 #define FLOAT_V_T vfloat32m8_t
-#define VLEV_FLOAT vle_v_f32m8
-#define VLSEV_FLOAT vlse_v_f32m8
-#define VSEV_FLOAT vse_v_f32m8
-#define VSSEV_FLOAT vsse_v_f32m8
+#define VLEV_FLOAT vle32_v_f32m8
+#define VLSEV_FLOAT vlse32_v_f32m8
+#define VSEV_FLOAT vse32_v_f32m8
+#define VSSEV_FLOAT vsse32_v_f32m8
 #define VFMULVF_FLOAT vfmul_vf_f32m8
 #define VFMVVF_FLOAT vfmv_v_f_f32m8
 #else
 #define VSETVL(n) vsetvl_e64m8(n)
 #define VSETVL_MAX vsetvlmax_e64m1()
 #define FLOAT_V_T vfloat64m8_t
-#define VLEV_FLOAT vle_v_f64m8
-#define VLSEV_FLOAT vlse_v_f64m8
-#define VSEV_FLOAT vse_v_f64m8
-#define VSSEV_FLOAT vsse_v_f64m8
+#define VLEV_FLOAT vle64_v_f64m8
+#define VLSEV_FLOAT vlse64_v_f64m8
+#define VSEV_FLOAT vse64_v_f64m8
+#define VSSEV_FLOAT vsse64_v_f64m8
 #define VFMULVF_FLOAT vfmul_vf_f64m8
 #define VFMVVF_FLOAT vfmv_v_f_f64m8
 #endif
@@ -85,19 +85,24 @@ int CNAME(BLASLONG n, BLASLONG dummy0, BLASLONG dummy1, FLOAT da, FLOAT *x, BLAS
         }else{
                 if(da == 0.0){
                         gvl = VSETVL(n);
+						BLASLONG stride_x = inc_x * sizeof(FLOAT);
+						BLASLONG ix = 0;
                         if(gvl <= n / 2){
+							    long int inc_xv = gvl * inc_x;
                                 v0 = VFMVVF_FLOAT(0, gvl);
                                 for(i = 0, j = 0; i < n/(2*gvl); i++, j+=2*gvl){
-                                        VSEV_FLOAT(&x[j], v0, gvl);
-                                        VSEV_FLOAT(&x[j+gvl], v0, gvl);
+									VSSEV_FLOAT(&x[ix], stride_x, v0, gvl);
+									VSSEV_FLOAT(&x[ix + inc_xv], stride_x, v0, gvl);
+									ix += inc_xv * 2;
                                 }
                         }
                         //tail
                         for(; j <n; ){
                                 gvl = VSETVL(n-j);
                                 v0 = VFMVVF_FLOAT(0, gvl);
-                                VSEV_FLOAT(&x[j], v0, gvl);
+								VSSEV_FLOAT(&x[ix], stride_x, v0, gvl);
                                 j += gvl;
+								ix += inc_x * gvl;
                         }
                 }else{
                         gvl = VSETVL(n);

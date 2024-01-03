@@ -20,10 +20,10 @@ More information is available at:
 Building an optimized OpenBLAS package for your machine
 =======================================================
 
-On amd64, arm64, i386, ppc64el, s390x, kfreebsd-amd64 and kfreebsd-i386,
-libopenblas-base provides a multiple architecture library. All kernels are
-included in the library and the one matching best your processor is selected at
-run time. Recompiling locally should bring minimal performance improvement.
+On amd64, arm64, i386, loong64, ppc64el and s390x, libopenblas provides a
+multiple architecture library. All kernels are included in the library and the
+one matching best your processor is selected at run time. Recompiling locally
+should bring minimal performance improvement.
 
 On the contrary, on other architectures, the package is compiled with minimal
 optimizations, so that it can run on all hardware. You may want to recompile it
@@ -44,29 +44,30 @@ machine, proceed as follows.
 
 where <UPSTREAM_VERSION> is replaced with the appropriate value.
 
-3) When the build finishes, it should produce a .deb file, whose precise name
-you can figure out using:
+3) When the build finishes, it should produce several .deb files, whose precise
+names you can figure out using:
 
- $ ls ../libopenblas-base_*.deb
+ $ ls ../libopenblas*.deb
 
-Install it using:
-
- $ sudo dpkg -i ../libopenblas-base_<VERSION>_<ARCH>.deb
-
-replacing <VERSION> and <ARCH> with the appropriate values.
+Install those that you want using dpkg. For the 32-bit indexing version, you
+need at least libopenblas0 and one of the three of
+libopenblas0-{openmp,pthread,serial}. For the 64-bit indexing version, you need
+at least libopenblas64-0 and one of the three of
+libopenblas64-0-{openmp,pthread,serial}
 
 4) If you don't want the Debian package manager to overwrite your optimized
 package with a generic one on system upgrades, you can mark the OpenBLAS
-package to be on hold, with the following command:
+package to be on hold, with the following command (for the 32-bit indexing
+version):
 
- $ sudo aptitude hold libopenblas-base
+ $ sudo apt-mark hold libopenblas0 libopenblas0-{openmp,pthread,serial}
 
 Don't forget however to periodically check whether a more recent version of the
 package is available for the Debian suite that you are tracking, in which case
 you should go again through this procedure. The version check can be performed
 using:
 
- $ aptitude versions libopenblas-base
+ $ aptitude versions libopenblas0
 
- -- Sébastien Villemot <sebastien@debian.org>, Tue, 13 Jul 2021 12:26:31 +0200
+ -- Sébastien Villemot <sebastien@debian.org>, Sat,  9 Sep 2023 17:15:50 +0200
  -- Sylvestre Ledru <sylvestre@debian.org>  Tue, 31 May 2011 13:56:22 +0200
