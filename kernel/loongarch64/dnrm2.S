@@ -53,6 +53,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define s4     $f9
 #define ALPHA  $f4
 #define max    $f5
+#define INF    $f6
 
    PROLOGUE
 
@@ -61,10 +62,15 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    LDINT   INCX,  0(INCX)
 #endif
 
+   // Init INF
+   addi.d  TEMP, $r0,  0x7FF
+   slli.d  TEMP, TEMP, 52
+   MTC  INF, TEMP
+
    MTC  s1, $r0
    bge $r0,    N, .L999
    slli.d INCX, INCX, BASE_SHIFT
-   bge $r0,    INCX, .L999
+   beq $r0,    INCX, .L999
    move    XX, X
    NOP
    LD a1,  X,   0 * SIZE
@@ -198,7 +204,11 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    CMPEQ   $fcc0, s1, a1
    fcvt.d.s   ALPHA, ALPHA
    bcnez   $fcc0, .L999
+
    fdiv.d  ALPHA, ALPHA, s1
+   CMPEQ   $fcc0, INF, ALPHA
+   bcnez   $fcc0, .L999
+
    MOV max, s1
    MOV s1, a1
    MOV s2, a1

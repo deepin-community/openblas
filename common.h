@@ -90,7 +90,7 @@ extern "C" {
 #endif
 #include <time.h>
 
-#ifdef OS_LINUX
+#if defined(OS_LINUX) || defined(OS_QNX)
 #include <malloc.h>
 #include <sched.h>
 #endif
@@ -107,7 +107,7 @@ extern "C" {
 #endif
 #endif
 
-#ifdef OS_HAIKU
+#if defined(OS_HAIKU) || defined(OS_QNX)
 #define NO_SYSV_IPC
 #endif
 
@@ -387,6 +387,10 @@ typedef int blasint;
 #endif
 */
 
+#ifdef __EMSCRIPTEN__
+#define YIELDING
+#endif
+
 #ifndef YIELDING
 #define YIELDING	sched_yield()
 #endif
@@ -474,6 +478,10 @@ please https://github.com/xianyi/OpenBLAS/issues/246
 #include "common_loongarch64.h"
 #endif
 
+#ifdef ARCH_E2K
+#include "common_e2k.h"
+#endif
+
 #ifndef ASSEMBLER
 #ifdef OS_WINDOWSSTORE
 typedef char env_var_t[MAX_PATH];
@@ -517,7 +525,7 @@ static inline unsigned long long rpcc(void){
 #endif // !RPCC_DEFINED
 
 #if !defined(BLAS_LOCK_DEFINED) && defined(__GNUC__)
-static void __inline blas_lock(volatile BLASULONG *address){
+static __inline void blas_lock(volatile BLASULONG *address){
 
   do {
     while (*address) {YIELDING;};

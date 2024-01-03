@@ -1,7 +1,3 @@
-ifeq ($(__BYTE_ORDER__),__ORDER_BIG_ENDIAN__)
-include $(KERNELDIR)/KERNEL.POWER8
-else
-
 #SGEMM_BETA = ../generic/gemm_beta.c
 #DGEMM_BETA = ../generic/gemm_beta.c
 #CGEMM_BETA = ../generic/zgemm_beta.c
@@ -20,8 +16,13 @@ SBGEMMOTCOPYOBJ =  sbgemm_otcopy$(TSUFFIX).$(SUFFIX)
 
 STRMMKERNEL	= sgemm_kernel_power10.c
 DTRMMKERNEL	= dgemm_kernel_power10.c
+ifeq ($(OSNAME), AIX)
+CTRMMKERNEL     = ctrmm_kernel_8x4_power8.S
+ZTRMMKERNEL     = ztrmm_kernel_8x2_power8.S
+else
 CTRMMKERNEL	= cgemm_kernel_power10.S
 ZTRMMKERNEL	= zgemm_kernel_power10.S
+endif
 
 SGEMMKERNEL    =  sgemm_kernel_power10.c
 SGEMMINCOPY    = ../generic/gemm_ncopy_16.c
@@ -33,6 +34,16 @@ SGEMMITCOPYOBJ =  sgemm_itcopy$(TSUFFIX).$(SUFFIX)
 SGEMMONCOPYOBJ =  sgemm_oncopy$(TSUFFIX).$(SUFFIX)
 SGEMMOTCOPYOBJ =  sgemm_otcopy$(TSUFFIX).$(SUFFIX)
 
+SGEMM_SMALL_M_PERMIT = gemm_small_kernel_permit_power10.c
+SGEMM_SMALL_K_NN = sgemm_small_kernel_nn_power10.c
+SGEMM_SMALL_K_B0_NN = sgemm_small_kernel_nn_power10.c
+SGEMM_SMALL_K_NT = sgemm_small_kernel_nt_power10.c
+SGEMM_SMALL_K_B0_NT = sgemm_small_kernel_nt_power10.c
+SGEMM_SMALL_K_TN = sgemm_small_kernel_tn_power10.c
+SGEMM_SMALL_K_B0_TN = sgemm_small_kernel_tn_power10.c
+SGEMM_SMALL_K_TT = sgemm_small_kernel_tt_power10.c
+SGEMM_SMALL_K_B0_TT = sgemm_small_kernel_tt_power10.c
+
 DGEMMKERNEL    =  dgemm_kernel_power10.c
 DGEMMINCOPY    =
 DGEMMITCOPY    =
@@ -43,9 +54,28 @@ DGEMMITCOPYOBJ =
 DGEMMONCOPYOBJ =  dgemm_oncopy$(TSUFFIX).$(SUFFIX)
 DGEMMOTCOPYOBJ =  dgemm_otcopy$(TSUFFIX).$(SUFFIX)
 
+DGEMM_SMALL_M_PERMIT = gemm_small_kernel_permit_power10.c
+DGEMM_SMALL_K_NT = dgemm_small_kernel_nt_power10.c
+DGEMM_SMALL_K_B0_NT = dgemm_small_kernel_nt_power10.c
+DGEMM_SMALL_K_NN = dgemm_small_kernel_nn_power10.c
+DGEMM_SMALL_K_B0_NN = dgemm_small_kernel_nn_power10.c
+DGEMM_SMALL_K_TT = dgemm_small_kernel_tt_power10.c
+DGEMM_SMALL_K_B0_TT = dgemm_small_kernel_tt_power10.c
+DGEMM_SMALL_K_TN = dgemm_small_kernel_tn_power10.c
+DGEMM_SMALL_K_B0_TN = dgemm_small_kernel_tn_power10.c
+
+ifeq ($(OSNAME), AIX)
+CGEMMKERNEL    = cgemm_kernel_8x4_power8.S
+else
 CGEMMKERNEL    = cgemm_kernel_power10.S
+endif
+#CGEMMKERNEL     = cgemm_kernel_8x4_power8.S
 CGEMMINCOPY    = ../generic/zgemm_ncopy_8.c
+ifeq ($(OSNAME), AIX)
+CGEMMITCOPY    = cgemm_tcopy_8_power8.S
+else
 CGEMMITCOPY    = ../generic/zgemm_tcopy_8.c
+endif
 CGEMMONCOPY    = ../generic/zgemm_ncopy_4.c
 CGEMMOTCOPY    = ../generic/zgemm_tcopy_4.c
 CGEMMONCOPYOBJ =  cgemm_oncopy$(TSUFFIX).$(SUFFIX)
@@ -53,7 +83,11 @@ CGEMMOTCOPYOBJ =  cgemm_otcopy$(TSUFFIX).$(SUFFIX)
 CGEMMINCOPYOBJ =  cgemm_incopy$(TSUFFIX).$(SUFFIX)
 CGEMMITCOPYOBJ =  cgemm_itcopy$(TSUFFIX).$(SUFFIX)
 
+ifeq ($(OSNAME), AIX)
+ZGEMMKERNEL    = zgemm_kernel_8x2_power8.S
+else
 ZGEMMKERNEL    = zgemm_kernel_power10.S
+endif
 ZGEMMONCOPY    = ../generic/zgemm_ncopy_2.c
 ZGEMMOTCOPY    = ../generic/zgemm_tcopy_2.c
 ZGEMMINCOPY    = ../generic/zgemm_ncopy_8.c
@@ -104,6 +138,7 @@ ZTRSMKERNEL_RT	= ../generic/trsm_kernel_RT.c
 #SMINKERNEL   = ../arm/min.c
 #DMINKERNEL   = ../arm/min.c
 #
+ifeq ($(C_COMPILER), GCC)
 ifneq ($(GCCVERSIONGTEQ9),1)
 ISAMAXKERNEL = isamax_power9.S
 else
@@ -126,6 +161,15 @@ IDAMINKERNEL = idamin.c
 ifneq ($(GCCVERSIONGTEQ9),1)
 ICAMINKERNEL = icamin_power9.S
 else
+ICAMINKERNEL = icamin.c
+endif
+else
+ISAMAXKERNEL = isamax.c
+IDAMAXKERNEL = idamax.c
+ICAMAXKERNEL = icamax.c
+IZAMAXKERNEL = izamax.c
+ISAMINKERNEL = isamin.c
+IDAMINKERNEL = idamin.c
 ICAMINKERNEL = icamin.c
 endif
 IZAMINKERNEL = izamin.c
@@ -218,5 +262,3 @@ QCABS_KERNEL	= ../generic/cabs.c
 #Dump kernel
 CGEMM3MKERNEL    = ../generic/zgemm3mkernel_dump.c
 ZGEMM3MKERNEL    = ../generic/zgemm3mkernel_dump.c
-
-endif

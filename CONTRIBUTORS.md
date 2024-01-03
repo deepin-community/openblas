@@ -23,6 +23,9 @@
   * Optimization on AMD Piledriver
   * Optimization on Intel Haswell
 
+* Chris Sidebottom <chris.sidebottom@arm.com>
+  * Optimizations and other improvements targeting AArch64
+
 ## Previous Developers
 
 * Zaheer Chothia <zaheer.chothia@gmail.com>
@@ -197,3 +200,19 @@ In chronological order:
 
 * River Dillon <oss@outerpassage.net>
   * [2021-07-10] fix compilation with musl libc
+
+* Bine Brank <https://github.com/binebrank>
+  * [2021-10-27] Add vector-length-agnostic DGEMM kernels for Arm SVE
+  * [2021-11-20] Vector-length-agnostic Arm SVE copy routines for DGEMM, DTRMM, DSYMM
+  * [2021-11-12] SVE kernels for SGEMM, STRMM and corresponding SVE copy functions
+  * [2022-01-06] SVE kernels for CGEMM, ZGEMM, CTRMM, ZTRMM and corresponding SVE copy functions
+  * [2022-01-18] SVE kernels and copy functions for TRSM
+
+* Ilya Kurdyukov <https://github.com/ilyakurdyukov>
+  * [2021-02-21] Add basic support for the Elbrus E2000 architecture
+
+* PLCT Lab, Institute of Software Chinese Academy of Sciences
+  * [2022-03] Support RISC-V Vector Intrinisc 1.0 version.
+  
+* Pablo Romero <https://github.com/pablorcum>
+  * [2022-08] Fix building from sources for QNX

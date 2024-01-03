@@ -36,8 +36,8 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define VSETVL_MAX vsetvlmax_e64m1()
 #define FLOAT_V_T vfloat64m8_t
 #define FLOAT_V_T_M1 vfloat64m1_t
-#define VLEV_FLOAT vle_v_f64m8
-#define VLSEV_FLOAT vlse_v_f64m8
+#define VLEV_FLOAT vle64_v_f64m8
+#define VLSEV_FLOAT vlse64_v_f64m8
 #define VFREDMINVS_FLOAT vfredmin_vs_f64m8_f64m1
 #define MASK_T vbool8_t
 #define VMFLTVV_FLOAT vmflt_vv_f64m8_b8
@@ -59,8 +59,8 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define VSETVL_MAX vsetvlmax_e32m1()
 #define FLOAT_V_T vfloat32m8_t
 #define FLOAT_V_T_M1 vfloat32m1_t
-#define VLEV_FLOAT vle_v_f32m8
-#define VLSEV_FLOAT vlse_v_f32m8
+#define VLEV_FLOAT vle32_v_f32m8
+#define VLSEV_FLOAT vlse32_v_f32m8
 #define VFREDMINVS_FLOAT vfredmin_vs_f32m8_f32m1
 #define MASK_T vbool4_t
 #define VMFLTVV_FLOAT vmflt_vv_f32m8_b4
@@ -129,24 +129,24 @@ asm volatile(
                         j += gvl;
                 }
                 v_res = VFREDMINVS_FLOAT(v_res, v_min, v_max, gvl);
-                minf = v_res[0];
+                minf = *((FLOAT*)&v_res);
                 mask = VMFLEVF_FLOAT(v_min, minf, gvl);
                 min_index = VMFIRSTM(mask,gvl);
-                min_index = v_min_index[min_index];
+                min_index = *((unsigned int*)&v_min_index+min_index);
 
                 if(j < n){
                         gvl = VSETVL(n-j);
                         v_min = VLEV_FLOAT(&x[j], gvl);
 
                         v_res = VFREDMINVS_FLOAT(v_res, v_min, v_max, gvl);
-                        FLOAT cur_minf = v_res[0];
+                        FLOAT cur_minf = *((FLOAT*)&v_res);
                         if(cur_minf < minf){
                                 //tail index
                                 v_min_index = VIDV_UINT(gvl);
                                 v_min_index = VADDVX_UINT(v_min_index, j, gvl);
                                 mask = VMFLEVF_FLOAT(v_min, cur_minf, gvl);
                                 min_index = VMFIRSTM(mask,gvl);
-                                min_index = v_min_index[min_index];
+                                min_index = *((unsigned int*)&v_min_index+min_index);
                         }
                 }
         }else{
@@ -190,24 +190,24 @@ asm volatile(
                         idx += inc_v;
                 }
                 v_res = VFREDMINVS_FLOAT(v_res, v_min, v_max, gvl);
-                minf = v_res[0];
+                minf = *((FLOAT*)&v_res);
                 mask = VMFLEVF_FLOAT(v_min, minf, gvl);
                 min_index = VMFIRSTM(mask,gvl);
-                min_index = v_min_index[min_index];
+                min_index = *((unsigned int*)&v_min_index+min_index);
 
                 if(j < n){
                         gvl = VSETVL(n-j);
                         v_min = VLSEV_FLOAT(&x[idx], stride_x, gvl);
 
                         v_res = VFREDMINVS_FLOAT(v_res, v_min, v_max, gvl);
-                        FLOAT cur_minf = v_res[0];
+                        FLOAT cur_minf = *((FLOAT*)&v_res);
                         if(cur_minf < minf){
                                 //tail index
                                 v_min_index = VIDV_UINT(gvl);
                                 v_min_index = VADDVX_UINT(v_min_index, j, gvl);
                                 mask = VMFLEVF_FLOAT(v_min, cur_minf, gvl);
                                 min_index = VMFIRSTM(mask,gvl);
-                                min_index = v_min_index[min_index];
+                                min_index = *((unsigned int*)&v_min_index+min_index);
                         }
                 }
         }

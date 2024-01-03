@@ -36,8 +36,8 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define VSETVL_MAX vsetvlmax_e64m1()
 #define FLOAT_V_T vfloat64m8_t
 #define FLOAT_V_T_M1 vfloat64m1_t
-#define VLEV_FLOAT vle_v_f64m8
-#define VLSEV_FLOAT vlse_v_f64m8
+#define VLEV_FLOAT vle64_v_f64m8
+#define VLSEV_FLOAT vlse64_v_f64m8
 #define VFREDMAXVS_FLOAT vfredmax_vs_f64m8_f64m1
 #define MASK_T vbool8_t
 #define VMFLTVV_FLOAT vmflt_vv_f64m8_b8
@@ -59,8 +59,8 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define VSETVL_MAX vsetvlmax_e32m1()
 #define FLOAT_V_T vfloat32m8_t
 #define FLOAT_V_T_M1 vfloat32m1_t
-#define VLEV_FLOAT vle_v_f32m8
-#define VLSEV_FLOAT vlse_v_f32m8
+#define VLEV_FLOAT vle32_v_f32m8
+#define VLSEV_FLOAT vlse32_v_f32m8
 #define VFREDMAXVS_FLOAT vfredmax_vs_f32m8_f32m1
 #define MASK_T vbool4_t
 #define VMFLTVV_FLOAT vmflt_vv_f32m8_b4
@@ -111,17 +111,17 @@ BLASLONG CNAME(BLASLONG n, FLOAT *x, BLASLONG inc_x)
                         j += gvl;
                 }
                 v_res = VFREDMAXVS_FLOAT(v_res, v_max, v_min, gvl);
-                maxf = v_res[0];
+                maxf = *((FLOAT*)&v_res);
                 mask = VMFGEVF_FLOAT(v_max, maxf, gvl);
                 max_index = VMFIRSTM(mask,gvl);
-                max_index = v_max_index[max_index];
+                max_index = *((unsigned int*)&v_max_index+max_index);
 
                 if(j < n){
                         gvl = VSETVL(n-j);
                         v_max = VLEV_FLOAT(&x[j], gvl);
 
                         v_res = VFREDMAXVS_FLOAT(v_res, v_max, v_min, gvl);
-                        FLOAT cur_maxf = v_res[0];
+                        FLOAT cur_maxf = *((FLOAT*)&v_res);
                         if(cur_maxf > maxf){
                                 //tail index
                                 v_max_index = VIDV_UINT(gvl);
@@ -129,7 +129,7 @@ BLASLONG CNAME(BLASLONG n, FLOAT *x, BLASLONG inc_x)
 
                                 mask = VMFGEVF_FLOAT(v_max, cur_maxf, gvl);
                                 max_index = VMFIRSTM(mask,gvl);
-                                max_index = v_max_index[max_index];
+                                max_index = *((unsigned int*)&v_max_index+max_index);
                         }
                 }
         }else{
@@ -153,17 +153,17 @@ BLASLONG CNAME(BLASLONG n, FLOAT *x, BLASLONG inc_x)
                         idx += inc_v;
                 }
                 v_res = VFREDMAXVS_FLOAT(v_res, v_max, v_min, gvl);
-                maxf = v_res[0];
+                maxf = *((FLOAT*)&v_res);
                 mask = VMFGEVF_FLOAT(v_max, maxf, gvl);
                 max_index = VMFIRSTM(mask,gvl);
-                max_index = v_max_index[max_index];
+                max_index = *((unsigned int*)&v_max_index+max_index);
 
                 if(j < n){
                         gvl = VSETVL(n-j);
                         v_max = VLSEV_FLOAT(&x[idx], stride_x, gvl);
 
                         v_res = VFREDMAXVS_FLOAT(v_res, v_max, v_min, gvl);
-                        FLOAT cur_maxf = v_res[0];
+                        FLOAT cur_maxf = *((FLOAT*)&v_res);
                         if(cur_maxf > maxf){
                                 //tail index
                                 v_max_index = VIDV_UINT(gvl);
@@ -171,7 +171,7 @@ BLASLONG CNAME(BLASLONG n, FLOAT *x, BLASLONG inc_x)
 
                                 mask = VMFGEVF_FLOAT(v_max, cur_maxf, gvl);
                                 max_index = VMFIRSTM(mask,gvl);
-                                max_index = v_max_index[max_index];
+                                max_index = *((unsigned int*)&v_max_index+max_index);
                         }
                 }
         }

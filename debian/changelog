@@ -1,3 +1,150 @@
+openblas (0.3.25+ds-1) unstable; urgency=medium
+
+  * New upstream version 0.3.25+ds
+
+ -- Sébastien Villemot <sebastien@debian.org>  Tue, 14 Nov 2023 20:25:25 +0100
+
+openblas (0.3.24+ds-1) unstable; urgency=medium
+
+  * New upstream version 0.3.24+ds
+  * d/copyright: reflect upstream changes
+  * mips64-generic.patch: drop patch, applied upstream
+  * revert-lapack-gedmd.patch: new patch for compiling against LAPACK 3.11
+  * Build on loong64 architecture
+  * d/rules: pass the number of requested parallel jobs to the build system.
+    Previously the build system would always use as many parallel jobs as there
+    are logical CPU cores.
+
+ -- Sébastien Villemot <sebastien@debian.org>  Sat, 09 Sep 2023 18:58:39 +0200
+
+openblas (0.3.23+ds-3) unstable; urgency=medium
+
+  * mips64-generic.patch: new patch from upstream.
+    Fixes incorrect numerical results on mips64el. (Closes: #1043048)
+  * shared-blas-lapack.patch: restore missing symbols in liblapack64.so.3.
+    Many symbols were inadvertently dropped in version 0.3.22+ds-1,
+    because of the overhaul of no-embedded-lapack.patch that removed the
+    lapack64-netlib directory. (Closes: #1039904)
+  * shared-blas-lapack.patch: add missing clean rule for lib{blas,lapack}64.so.3
+  * Remove all references to kfreebsd-{amd64,i386} ports
+  * README.Debian: update binary packages names for custom installation
+    procedure
+
+ -- Sébastien Villemot <sebastien@debian.org>  Sun, 06 Aug 2023 20:45:18 +0200
+
+openblas (0.3.23+ds-2) unstable; urgency=medium
+
+  * Upload to unstable
+  * kfreebsd.patch: drop patch, the GNU/kFreeBSD ports have been abandoned
+
+ -- Sébastien Villemot <sebastien@debian.org>  Tue, 13 Jun 2023 10:48:52 +0200
+
+openblas (0.3.23+ds-1) experimental; urgency=medium
+
+  * New upstream version 0.3.23+ds
+
+ -- Sébastien Villemot <sebastien@debian.org>  Sat, 01 Apr 2023 23:47:25 +0200
+
+openblas (0.3.22+ds-1) experimental; urgency=medium
+
+  * New upstream version 0.3.22+ds
+  * d/copyright: reflect upstream changes
+  * Drop patches applied upstream
+    + mips64el-utest-dnrm2.patch
+    + pr-3718-ppc64el-segfault.patch
+  * d/rules: use new MIPS64_GENERIC target to build on mips64el
+  * Set upstream metadata fields: Security-Contact.
+
+ -- Sébastien Villemot <sebastien@debian.org>  Tue, 28 Mar 2023 21:11:15 +0200
+
+openblas (0.3.21+ds-4) unstable; urgency=medium
+
+  * Manage CMake files through the alternatives system.
+    For consistency with the pkgconfig files.
+  * Bump S-V to 4.6.2
+
+ -- Sébastien Villemot <sebastien@debian.org>  Mon, 19 Dec 2022 16:03:51 +0100
+
+openblas (0.3.21+ds-3) unstable; urgency=medium
+
+  * Install CMake files under /usr/lib/$(MULTIARCH)/cmake/openblas$(FLAVOR)/
+    Thanks to Juan Jose Garcia Ripoll for reporting (Closes: #1000332)
+  * no-embedded-lapack.patch: fix logic for detecting build with 64-bit
+    indexing. In particular, this fixes the riscv64 packages whose embedded
+    LAPACK routines were unusable with 32-bit indexing.
+    Thanks to Дмитрий Ермилов (Closes: #1022950)
+
+ -- Sébastien Villemot <sebastien@debian.org>  Sun, 27 Nov 2022 21:22:10 +0100
+
+openblas (0.3.21+ds-2) unstable; urgency=medium
+
+  [ Mo Zhou ]
+  * Cherry-pick upstream commit to fix ppc64el FTBFS.
+
+  [ Sébastien Villemot ]
+  * mips64el-utest-dnrm2.patch: new patch from upstream, fixes FTBFS on mips64el
+
+ -- Sébastien Villemot <sebastien@debian.org>  Wed, 14 Sep 2022 13:07:58 +0200
+
+openblas (0.3.21+ds-1) unstable; urgency=medium
+
+  * New upstream version 0.3.21+ds
+  * d/copyright: reflect upstream changes
+  * d/control: drop transitional libopenblas-base package, no longer needed
+  * Bump S-V to 4.6.1
+  * Update renamed lintian tag names in lintian overrides.
+
+ -- Sébastien Villemot <sebastien@debian.org>  Sun, 14 Aug 2022 22:37:14 +0200
+
+openblas (0.3.20+ds-2) unstable; urgency=medium
+
+  * Remove deprecated xCOMBSSQ lapack routines. (Closes: #1011386)
+  * Remove bin:libjulia-openblas64, which is no longer needed.
+    Exporting libopenblas64_.so with SYMBOLSUFFIX=64_ in Julia private
+    library as an external dependency introduces complication in Julia
+    package compiling process. We currently do not have proposal to
+    put libopenblas64_.so (with symbol suffix) in the public library,
+    because that will eventually lead to NINE variants to build for amd64:
+    (1) LP64 (32-bit indexing), three threading models, default;
+    (2) ILP64 (64-bit indexing), three threading models, no symbol suffix;
+    (3) ILP64 (64-bit indexing), three threading models, symbols suffix 64_.
+    Currently we only provide the (1) and (2) combinations, because BLAS
+    libraries without symbol mangling can still be alternated to e.g. MKL.
+
+ -- Mo Zhou <lumin@debian.org>  Sat, 21 May 2022 16:25:13 -0400
+
+openblas (0.3.20+ds-1) unstable; urgency=medium
+
+  * New upstream version 0.3.20+ds
+  * d/copyright: reflect upstream changes
+  * mips64el.patch, avx512-dgemm.patch: drop patches, applied upstream
+
+ -- Sébastien Villemot <sebastien@debian.org>  Mon, 21 Feb 2022 11:14:52 +0100
+
+openblas (0.3.19+ds-3) unstable; urgency=medium
+
+  * avx512-dgemm.patch: new patch, fixes DGEMM regression on AVX-512 CPUs
+
+ -- Sébastien Villemot <sebastien@debian.org>  Fri, 14 Jan 2022 15:21:00 +0100
+
+openblas (0.3.19+ds-2) unstable; urgency=medium
+
+  * mips64el.patch: new patch, should fix FTBFS on mips64el
+
+ -- Sébastien Villemot <sebastien@debian.org>  Mon, 10 Jan 2022 12:26:34 +0100
+
+openblas (0.3.19+ds-1) unstable; urgency=medium
+
+  * New upstream version 0.3.19+ds
+    + fixes segfault of pthread flavour when running out of memory
+      (Closes: #995450)
+  * d/copyright: reflect upstream changes
+  * 3422.patch (trsv shortcut revert): drop patch, applied upstream
+  * Tighten Build-Depends on liblapack{,64}-dev to >= 3.10.0-2~
+    This ensures that the fix for CVE-2021-4048 is incorporated.
+
+ -- Sébastien Villemot <sebastien@debian.org>  Mon, 20 Dec 2021 13:27:29 +0100
+
 openblas (0.3.18+ds-2) unstable; urgency=medium
 
   * Team upload.
